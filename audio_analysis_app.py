@@ -383,4 +383,10 @@ def generate_interpretation(report):
     )
     return response['choices'][0]['message']['content']
 
-openai.api_key = st.secrets["openai"]["api_key"] 
+# Set OpenAI API key from Streamlit secrets (support both formats)
+if "OPENAI_API_KEY" in st.secrets:
+    openai.api_key = st.secrets["OPENAI_API_KEY"]
+elif "openai" in st.secrets and "api_key" in st.secrets["openai"]:
+    openai.api_key = st.secrets["openai"]["api_key"]
+else:
+    st.error("OpenAI API key not found in Streamlit secrets. Please add it as 'OPENAI_API_KEY' or in the [openai] section.") 
