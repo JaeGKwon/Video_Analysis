@@ -2,7 +2,6 @@ import streamlit as st
 import subprocess
 import os
 import glob
-import shutil
 
 st.title("🎬 Video Screenshot & Tone Analyzer")
 
@@ -14,11 +13,16 @@ except ModuleNotFoundError as e:
     st.error(f"❌ Missing required library: {e.name}. Please install it using pip.")
     st.stop()
 
-ffmpeg_path = shutil.which("ffmpeg")
-if ffmpeg_path:
-    st.success(f"✅ ffmpeg found at: {ffmpeg_path}")
-else:
-    st.error("❌ ffmpeg not found in PATH. Please install ffmpeg and ensure it is accessible.")
+# Directly check ffmpeg by running a simple command
+try:
+    ffmpeg_check = subprocess.run(["ffmpeg", "-version"], capture_output=True, text=True)
+    if ffmpeg_check.returncode == 0:
+        st.success("✅ ffmpeg is installed and accessible.")
+    else:
+        st.error("❌ ffmpeg is installed but returned an error on check.")
+        st.stop()
+except FileNotFoundError:
+    st.error("❌ ffmpeg not found in PATH. Please install it and ensure it's accessible.")
     st.stop()
 
 screenshot_folder = "./screenshots"
@@ -55,7 +59,7 @@ if video_file is not None:
     if st.button("Extract and Analyze Screenshots"):
         try:
             command = [
-                ffmpeg_path,
+                'ffmpeg',
                 '-i', video_path,
                 '-vf', f'fps=1/{interval}',
                 f'{screenshot_folder}/screenshot_%04d.png'
