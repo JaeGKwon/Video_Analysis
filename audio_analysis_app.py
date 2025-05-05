@@ -10,6 +10,7 @@ import tempfile
 import time
 from datetime import datetime
 import json
+import shutil
 
 # Page configuration
 st.set_page_config(
@@ -135,11 +136,15 @@ if video_file is not None:
         
         # Extract audio from video
         if extract_audio_from_video(temp_video_path, temp_audio_path):
-            st.session_state['audio_file'] = temp_audio_path
-            st.session_state['extracted_audio_path'] = temp_audio_path
+            # Create a permanent copy of the audio file
+            permanent_audio_path = f"audio_{os.path.splitext(video_file.name)[0]}.wav"
+            shutil.copy2(temp_audio_path, permanent_audio_path)
+            
+            st.session_state['audio_file'] = permanent_audio_path
+            st.session_state['extracted_audio_path'] = permanent_audio_path
             
             # Display audio player with waveform
-            st.audio(temp_audio_path, format="audio/wav")
+            st.audio(permanent_audio_path, format="audio/wav")
             
             # Show file information
             with st.expander("File Information"):
@@ -155,14 +160,14 @@ analysis_types = st.multiselect(
     "Select analysis types:",
     ["Emotional Response", "Engagement Patterns", "Brand Identity", 
      "Psychological Impact", "Audience Reception"],
-    default=["Emotional Response", "Engagement Patterns"],
+    default=["Emotional Response", "Engagement Patterns", "Brand Identity", 
+             "Psychological Impact", "Audience Reception"],
     help="Choose which aspects of the audio to analyze"
 )
 
 # Reference audio for brand identity analysis
 if "Brand Identity" in analysis_types:
     st.subheader("Brand Identity Analysis")
-    st.info("Using the uploaded video's audio as reference for brand identity analysis")
     ref_path = st.session_state.get('extracted_audio_path')
 
 # Demographic data for audience reception analysis
@@ -195,8 +200,12 @@ else:
 if st.button("Run Analysis", type="primary") and st.session_state['audio_file']:
     with st.spinner("Analyzing audio..."):
         try:
-            # Initialize analyzer
-            analyzer = AdvancedAudioAnalyzer(st.session_state['audio_file'])
+            # Initialize analyzer with the correct file path
+            audio_path = st.session_state['audio_file']
+            if not os.path.exists(audio_path):
+                raise FileNotFoundError(f"Audio file not found at {audio_path}")
+                
+            analyzer = AdvancedAudioAnalyzer(audio_path)
             st.session_state['analyzer'] = analyzer
             
             # Run selected analyses
