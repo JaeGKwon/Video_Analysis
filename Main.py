@@ -161,9 +161,13 @@ if video_file is not None:
 else:
     st.session_state['video_file'] = None
 
-clean_up = st.checkbox("Clean up previous screenshots")
+# Checkbox is checked by default
+clean_up = st.checkbox("Clean up previous screenshots", value=True)
+
+st.subheader("Extraction Settings")
 interval = st.number_input("Frame extraction interval (seconds)", min_value=1, max_value=300, value=10)
 max_frames = st.number_input("Maximum frames to extract", min_value=1, max_value=50, value=10)
+st.subheader("Analysis Settings")
 custom_tone = st.text_input("Add custom tone descriptor:", placeholder="e.g., 'elegant and refined'")
 
 default_descriptions = [
@@ -189,9 +193,17 @@ if not selected_tones:
 
 if video_file is not None and st.button("Extract and Analyze Screenshots"):
     if clean_up:
+        # Remove all screenshots
         for file in glob.glob(f"{screenshot_folder}/screenshot_*.png"):
             os.remove(file)
-        st.success("Previous screenshots removed")
+        # Remove all video files in the main directory and screenshots folder
+        video_extensions = ["*.mp4", "*.mov", "*.avi", "*.mkv", "*.wmv", "*.mpeg", "*.mpg"]
+        for ext in video_extensions:
+            for file in glob.glob(ext):
+                os.remove(file)
+            for file in glob.glob(os.path.join(screenshot_folder, ext)):
+                os.remove(file)
+        st.success("Previous screenshots and uploaded video files removed.")
     with st.spinner("Processing video..."):
         try:
             # Save the video file to the screenshot folder
