@@ -54,6 +54,27 @@ def generate_interpretation(report):
     except Exception as e:
         return f"Error generating interpretation: {e}"
 
+def generate_insight_for_type(analysis_type, analysis_data):
+    try:
+        prompt = (
+            f"Given the following {analysis_type} analysis result, provide a concise interpretation for a non-technical user. "
+            "Evaluate the audio from a user perspective (e.g., 'the music was too intense', 'the narration was clear', etc.). "
+            "Also, provide at least one suggestion for what could be improved in the audio to enhance user experience. "
+            f"\n{analysis_type} Result:\n{analysis_data}\n"
+            "\nFormat your answer as follows:\n"
+            "User Perspective: <your summary>\n"
+            "What Can Be Done Better: <your suggestion>"
+        )
+        client = openai.OpenAI(api_key=openai.api_key)
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=300
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        return f"Error generating insight: {e}"
+
 # Page configuration
 st.set_page_config(
     page_title="Audio Analysis Dashboard",
@@ -274,11 +295,15 @@ if st.button("Run Analysis", type="primary") and st.session_state['audio_file']:
             
             st.session_state['analysis_report'] = report
             
-            # Automatically generate interpretation after analysis
-            with st.spinner("Generating interpretation with LLM..."):
-                interpretation = generate_interpretation(report)
-                st.session_state['interpretation'] = interpretation
-            st.success("Analysis and interpretation completed successfully!")
+            # Generate LLM insights for each selected analysis type
+            insights = {}
+            with st.spinner("Generating insights with LLM..."):
+                for analysis_type in analysis_types:
+                    key = analysis_type.lower().replace(" ", "_")
+                    if key in report:
+                        insights[analysis_type] = generate_insight_for_type(analysis_type, report[key])
+            st.session_state['insights'] = insights
+            st.success("Analysis and insights completed successfully!")
             
         except Exception as e:
             st.error(f"Error during analysis: {str(e)}")
@@ -293,6 +318,7 @@ if st.session_state['analysis_report']:
     
     for i, tab in enumerate(tabs):
         with tab:
+            analysis_key = analysis_types[i].lower().replace(" ", "_")
             if analysis_types[i] == "Emotional Response":
                 emotional_data = st.session_state['analysis_report']['emotional_response']
                 
@@ -373,10 +399,10 @@ if st.session_state['analysis_report']:
                     st.metric("Spectral Rolloff", 
                              f"{float(audience_data['spectral_characteristics']['rolloff']):.2f}")
 
-    # Show interpretation if available
-    if 'interpretation' in st.session_state and st.session_state['interpretation']:
-        st.subheader("LLM Evaluation & Suggestions")
-        st.info(st.session_state['interpretation'])
+            # Show LLM insight for this analysis type
+            if 'insights' in st.session_state and analysis_types[i] in st.session_state['insights']:
+                st.subheader("LLM Evaluation & Suggestions")
+                st.info(st.session_state['insights'][analysis_types[i]])
 
 # Footer
 st.markdown("---")
