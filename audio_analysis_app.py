@@ -361,6 +361,11 @@ if st.session_state['analysis_report']:
                     st.metric("Spectral Rolloff", 
                              f"{float(audience_data['spectral_characteristics']['rolloff']):.2f}")
 
+    # Add Generate Interpretation button here
+    if st.button("Generate Interpretation"):
+        interpretation = generate_interpretation(st.session_state['analysis_report'])
+        st.info(interpretation)
+
 # Footer
 st.markdown("---")
 st.markdown("""
@@ -371,17 +376,20 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 def generate_interpretation(report):
-    prompt = (
-        "Given the following audio analysis results, provide a concise interpretation for a non-technical user:\n"
-        f"{report}\n"
-        "What are the key emotional moments and what do they mean?"
-    )
-    response = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo",  # or "gpt-4"
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=200
-    )
-    return response['choices'][0]['message']['content']
+    try:
+        prompt = (
+            "Given the following audio analysis results, provide a concise interpretation for a non-technical user:\n"
+            f"{report}\n"
+            "What are the key emotional moments and what do they mean?"
+        )
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",  # or "gpt-4"
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=200
+        )
+        return response['choices'][0]['message']['content']
+    except Exception as e:
+        return f"Error generating interpretation: {e}"
 
 # Set OpenAI API key from Streamlit secrets (support both formats)
 if "OPENAI_API_KEY" in st.secrets:
