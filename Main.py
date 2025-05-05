@@ -286,6 +286,7 @@ if video_file is not None and st.button("Extract and Analyze Screenshots"):
                             st.warning("No screenshots were generated.")
             else:
                 st.error("Could not determine video duration.")
+                st.code(duration_output)  # This will show the ffmpeg output in the Streamlit app
             
         except Exception as e:
             st.error(f"Error processing video: {str(e)}")
