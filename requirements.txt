@@ -5,3 +5,4 @@ torch
 transformers
 ffmpeg-python
 imageio
+moviepy
