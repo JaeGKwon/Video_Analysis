@@ -38,6 +38,9 @@ class AdvancedAudioAnalyzer:
         # Create time windows for emotional progression
         window_size = int(self.sr * 1.0)  # 1-second windows
         emotional_arc = []
+        arc_energy = []
+        arc_pitch = []
+        arc_time = []
         
         for i in range(0, len(self.y), window_size):
             window = self.y[i:i+window_size]
@@ -45,11 +48,22 @@ class AdvancedAudioAnalyzer:
                 # Calculate features for this window
                 window_energy = librosa.feature.rms(y=window)[0]
                 window_pitch = librosa.piptrack(y=window, sr=self.sr)[0]
+                mean_energy = float(np.mean(window_energy))
+                mean_pitch = float(np.mean(window_pitch))
+                arc_time.append(i/self.sr)
+                arc_energy.append(mean_energy)
+                arc_pitch.append(mean_pitch)
                 emotional_arc.append({
                     'time': i/self.sr,
-                    'energy': np.mean(window_energy),
-                    'pitch': np.mean(window_pitch)
+                    'energy': mean_energy,
+                    'pitch': mean_pitch
                 })
+        # Optionally scale energy for better visualization
+        if np.max(arc_energy) > 0:
+            scale = np.max(arc_pitch) / np.max(arc_energy) if np.max(arc_energy) > 0 else 1
+            arc_energy_scaled = [e * scale for e in arc_energy]
+            for idx, entry in enumerate(emotional_arc):
+                entry['energy'] = arc_energy_scaled[idx]
         
         return {
             'pitch_profile': pitch_mean,
