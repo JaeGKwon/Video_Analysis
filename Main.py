@@ -3,43 +3,28 @@ import subprocess
 import os
 import glob
 
-# Check all required Python libraries at the very start
-missing_libraries = []
+st.title("🎬 Video Screenshot & Tone Analyzer")
 
 try:
     from PIL import Image
-except ModuleNotFoundError:
-    missing_libraries.append('Pillow')
-
-try:
     from transformers import CLIPProcessor, CLIPModel
-except ModuleNotFoundError:
-    missing_libraries.append('transformers')
-
-try:
     import torch
-except ModuleNotFoundError:
-    missing_libraries.append('torch')
-
-if missing_libraries:
-    st.error(f"❌ Missing required libraries: {', '.join(missing_libraries)}. Please install them using pip.")
+except ModuleNotFoundError as e:
+    st.error(f"❌ Missing required library: {e.name}. Please install it using pip.")
     st.stop()
 
-st.title("🎬 Video Screenshot & Tone Analyzer")
+try:
+    ffmpeg_check = subprocess.run(["ffmpeg", "-version"], capture_output=True, text=True)
+    if ffmpeg_check.returncode != 0:
+        st.warning("⚠️ ffmpeg found but returned error on version check.")
+except Exception as e:
+    st.warning(f"⚠️ Could not verify ffmpeg installation: {e}")
 
 screenshot_folder = "./screenshots"
 os.makedirs(screenshot_folder, exist_ok=True)
 
 video_file = st.file_uploader("Upload a video file", type=["mp4", "mov", "avi"])
 interval = st.number_input("Frame extraction interval (seconds)", min_value=1, value=10)
-
-# Check ffmpeg availability
-try:
-    ffmpeg_check = subprocess.run(["ffmpeg", "-version"], capture_output=True, text=True)
-    ffmpeg_installed = ffmpeg_check.returncode == 0
-except Exception as e:
-    st.warning(f"⚠️ Could not verify ffmpeg installation: {e}")
-    ffmpeg_installed = True  # allow to proceed anyway
 
 processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
 model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
@@ -62,14 +47,9 @@ def analyze_with_clip(image_path, text_descriptions):
 
 if video_file is not None:
     video_path = os.path.join(screenshot_folder, video_file.name)
-
     with open(video_path, "wb") as f:
         f.write(video_file.read())
-
     st.success(f"Video uploaded: {video_file.name}")
-
-    if not ffmpeg_installed:
-        st.warning("⚠️ ffmpeg not detected. Please ensure it is installed and accessible in PATH.")
 
     if st.button("Extract and Analyze Screenshots"):
         try:
@@ -84,15 +64,12 @@ if video_file is not None:
                 st.error(f"ffmpeg error: {result.stderr}")
             else:
                 st.success("Screenshots extracted!")
-
                 screenshots = sorted(glob.glob(f"{screenshot_folder}/screenshot_*.png"))
-
                 if screenshots:
                     st.header("Sample Screenshots")
                     for img_path in screenshots:
                         img = Image.open(img_path)
                         st.image(img, caption=os.path.basename(img_path), use_column_width=True)
-
                         analysis = analyze_with_clip(img_path, descriptions)
                         st.write(f"🧠 *Tone Analysis for {os.path.basename(img_path)}*:")
                         st.json(analysis)
