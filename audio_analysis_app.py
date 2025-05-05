@@ -281,16 +281,6 @@ if st.button("Run Analysis", type="primary") and st.session_state['audio_file']:
                 json.dump(report, f, indent=4, cls=NumpyEncoder)
             
             st.success("Analysis completed successfully!")
-            #st.download_button(
-            #    label="Download Analysis Report",
-            #    data=json.dumps(report, indent=4, cls=NumpyEncoder),
-            #    file_name=report_path,
-            #    mime="application/json"
-            #)
-            
-            #if st.button("Generate Interpretation", key="generate_interpretation_btn_final"):
-            #    interpretation = generate_interpretation(report)
-            #    st.info(interpretation)
             
         except Exception as e:
             st.error(f"Error during analysis: {str(e)}")
@@ -385,19 +375,10 @@ if st.session_state['analysis_report']:
                     st.metric("Spectral Rolloff", 
                              f"{float(audience_data['spectral_characteristics']['rolloff']):.2f}")
 
-    # Place only the Generate Interpretation button in the results section
-    col1, col2 = st.columns(2)
-    # with col1:
-    #     st.download_button(
-    #         label="Download Analysis Report",
-    #         data=json.dumps(st.session_state['analysis_report'], indent=4, cls=NumpyEncoder),
-    #         file_name="analysis_report.json",
-    #         mime="application/json"
-    #     )
-    with col2:
-        if st.button("Generate Interpretation", key="generate_interpretation_btn_final"):
-            interpretation = generate_interpretation(st.session_state['analysis_report'])
-            st.info(interpretation)
+    # Only one Generate Interpretation button, not in columns
+    if st.button("Generate Interpretation", key="generate_interpretation_btn_final"):
+        interpretation = generate_interpretation(st.session_state['analysis_report'])
+        st.info(interpretation)
 
 # Footer
 st.markdown("---")
