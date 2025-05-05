@@ -39,12 +39,13 @@ def generate_interpretation(report):
             f"{report}\n"
             "What are the key emotional moments and what do they mean?"
         )
-        response = openai.ChatCompletion.create(
+        client = openai.OpenAI(api_key=openai.api_key)
+        response = client.chat.completions.create(
             model="gpt-3.5-turbo",  # or "gpt-4"
             messages=[{"role": "user", "content": prompt}],
             max_tokens=200
         )
-        return response['choices'][0]['message']['content']
+        return response.choices[0].message.content
     except Exception as e:
         return f"Error generating interpretation: {e}"
 
