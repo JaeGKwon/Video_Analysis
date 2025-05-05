@@ -3,7 +3,7 @@ import subprocess
 import os
 import glob
 
-st.title("🎬 Video Screenshot & Tone Analyzer")
+st.title("🎬 Video Screenshot & Tone Analyzer") 
 
 try:
     from PIL import Image
