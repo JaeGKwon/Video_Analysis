@@ -1,6 +1,7 @@
 import streamlit as st
 import subprocess
 import os
+import glob
 from PIL import Image
 
 try:
@@ -15,11 +16,14 @@ st.title("🎬 Video Screenshot & Tone Analyzer")
 if not CLIP_AVAILABLE:
     st.warning("⚠️ The 'transformers' or 'torch' module is not installed. Please install them using 'pip install transformers torch'.")
 
+screenshot_folder = "./screenshots"
+os.makedirs(screenshot_folder, exist_ok=True)
+
 video_file = st.file_uploader("Upload a video file", type=["mp4", "mov", "avi"])
 interval = st.number_input("Frame extraction interval (seconds)", min_value=1, value=10)
 
-screenshot_folder = "./screenshots"
-os.makedirs(screenshot_folder, exist_ok=True)
+if st.button("Clear Inputs"):
+    st.experimental_rerun()
 
 if CLIP_AVAILABLE:
     processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
@@ -71,14 +75,13 @@ if video_file is not None and ffmpeg_installed:
         except Exception as e:
             st.error(f"Error running ffmpeg: {e}")
 
-    screenshots = sorted([f for f in os.listdir(screenshot_folder) if f.endswith(".png")])
+    screenshots = sorted(glob.glob(f"{screenshot_folder}/screenshot_*.png"))
 
     if screenshots:
         st.header("Sample Screenshots")
-        for img_file in screenshots:
-            img_path = os.path.join(screenshot_folder, img_file)
+        for img_path in screenshots:
             img = Image.open(img_path)
-            st.image(img, caption=img_file, use_column_width=True)
+            st.image(img, caption=os.path.basename(img_path), use_column_width=True)
 
             if CLIP_AVAILABLE:
                 analysis = analyze_with_clip(img_path, descriptions)
