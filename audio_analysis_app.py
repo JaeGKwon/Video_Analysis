@@ -24,6 +24,30 @@ class NumpyEncoder(json.JSONEncoder):
             return float(obj)
         return super(NumpyEncoder, self).default(obj)
 
+# Set OpenAI API key from Streamlit secrets (support both formats)
+if "OPENAI_API_KEY" in st.secrets:
+    openai.api_key = st.secrets["OPENAI_API_KEY"]
+elif "openai" in st.secrets and "api_key" in st.secrets["openai"]:
+    openai.api_key = st.secrets["openai"]["api_key"]
+else:
+    st.error("OpenAI API key not found in Streamlit secrets. Please add it as 'OPENAI_API_KEY' or in the [openai] section.")
+
+def generate_interpretation(report):
+    try:
+        prompt = (
+            "Given the following audio analysis results, provide a concise interpretation for a non-technical user:\n"
+            f"{report}\n"
+            "What are the key emotional moments and what do they mean?"
+        )
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",  # or "gpt-4"
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=200
+        )
+        return response['choices'][0]['message']['content']
+    except Exception as e:
+        return f"Error generating interpretation: {e}"
+
 # Page configuration
 st.set_page_config(
     page_title="Audio Analysis Dashboard",
@@ -264,7 +288,7 @@ if st.button("Run Analysis", type="primary") and st.session_state['audio_file']:
                 mime="application/json"
             )
             
-            if st.button("Generate Interpretation", key="generate_interpretation_btn"):
+            if st.button("Generate Interpretation", key="generate_interpretation_btn_final"):
                 interpretation = generate_interpretation(report)
                 st.info(interpretation)
             
@@ -371,7 +395,7 @@ if st.session_state['analysis_report']:
             mime="application/json"
         )
     with col2:
-        if st.button("Generate Interpretation", key="generate_interpretation_btn"):
+        if st.button("Generate Interpretation", key="generate_interpretation_btn_final"):
             interpretation = generate_interpretation(st.session_state['analysis_report'])
             st.info(interpretation)
 
@@ -382,28 +406,4 @@ st.markdown("""
     <p>Audio Analysis Dashboard | Created with Streamlit</p>
     <p>For support or feedback, please contact the development team</p>
 </div>
-""", unsafe_allow_html=True)
-
-def generate_interpretation(report):
-    try:
-        prompt = (
-            "Given the following audio analysis results, provide a concise interpretation for a non-technical user:\n"
-            f"{report}\n"
-            "What are the key emotional moments and what do they mean?"
-        )
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",  # or "gpt-4"
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=200
-        )
-        return response['choices'][0]['message']['content']
-    except Exception as e:
-        return f"Error generating interpretation: {e}"
-
-# Set OpenAI API key from Streamlit secrets (support both formats)
-if "OPENAI_API_KEY" in st.secrets:
-    openai.api_key = st.secrets["OPENAI_API_KEY"]
-elif "openai" in st.secrets and "api_key" in st.secrets["openai"]:
-    openai.api_key = st.secrets["openai"]["api_key"]
-else:
-    st.error("OpenAI API key not found in Streamlit secrets. Please add it as 'OPENAI_API_KEY' or in the [openai] section.") 
+""", unsafe_allow_html=True) 
