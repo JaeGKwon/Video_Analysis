@@ -11,6 +11,7 @@ import time
 from datetime import datetime
 import json
 import shutil
+import openai
 
 # Custom JSON encoder for numpy types
 class NumpyEncoder(json.JSONEncoder):
@@ -263,6 +264,10 @@ if st.button("Run Analysis", type="primary") and st.session_state['audio_file']:
                 mime="application/json"
             )
             
+            if st.button("Generate Interpretation"):
+                interpretation = generate_interpretation(report)
+                st.info(interpretation)
+            
         except Exception as e:
             st.error(f"Error during analysis: {str(e)}")
             st.error("Please try again with a different file or contact support if the issue persists.")
@@ -363,4 +368,19 @@ st.markdown("""
     <p>Audio Analysis Dashboard | Created with Streamlit</p>
     <p>For support or feedback, please contact the development team</p>
 </div>
-""", unsafe_allow_html=True) 
+""", unsafe_allow_html=True)
+
+def generate_interpretation(report):
+    prompt = (
+        "Given the following audio analysis results, provide a concise interpretation for a non-technical user:\n"
+        f"{report}\n"
+        "What are the key emotional moments and what do they mean?"
+    )
+    response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",  # or "gpt-4"
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=200
+    )
+    return response['choices'][0]['message']['content']
+
+openai.api_key = st.secrets["openai"]["api_key"] 
