@@ -8,3 +8,4 @@ imageio
 moviepy
 transformers
 torch
+scikit-learn
