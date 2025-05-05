@@ -1,4 +1,3 @@
-# Streamlit app with guidance for ffmpeg installation
 import streamlit as st
 import subprocess
 import os
@@ -11,19 +10,14 @@ try:
 except ModuleNotFoundError:
     CLIP_AVAILABLE = False
 
-# App title
 st.title("🎬 Video Screenshot & Tone Analyzer")
 
 if not CLIP_AVAILABLE:
-    st.warning("⚠️ The 'transformers' or 'torch' module is not installed. Please install them with 'pip install transformers torch' to enable tone analysis.")
+    st.warning("⚠️ The 'transformers' or 'torch' module is not installed. Please install them using 'pip install transformers torch'.")
 
-# Upload video file
 video_file = st.file_uploader("Upload a video file", type=["mp4", "mov", "avi"])
-
-# Parameters
 interval = st.number_input("Frame extraction interval (seconds)", min_value=1, value=10)
 
-# Create folder for screenshots
 screenshot_folder = "./screenshots"
 os.makedirs(screenshot_folder, exist_ok=True)
 
@@ -47,19 +41,15 @@ if CLIP_AVAILABLE:
         probs = logits_per_image.softmax(dim=1)
         return {desc: round(prob.item(), 3) for desc, prob in zip(text_descriptions, probs[0])}
 
-# ffmpeg check and user guidance
-ffmpeg_installed = subprocess.run(["which", "ffmpeg"], capture_output=True).returncode == 0
-if not ffmpeg_installed:
-    st.error("❌ ffmpeg is not installed or not found in PATH.")
-    st.write("To install ffmpeg:")
-    st.code("brew install ffmpeg  # on macOS (Homebrew)")
-    st.code("sudo apt-get install ffmpeg  # on Ubuntu/Linux")
-    st.code("choco install ffmpeg  # on Windows (Chocolatey)")
+try:
+    ffmpeg_check = subprocess.run(["ffmpeg", "-version"], capture_output=True, text=True)
+    ffmpeg_installed = ffmpeg_check.returncode == 0
+except FileNotFoundError:
+    ffmpeg_installed = False
 
 if video_file is not None and ffmpeg_installed:
     video_path = os.path.join(screenshot_folder, video_file.name)
 
-    # Save video file
     with open(video_path, "wb") as f:
         f.write(video_file.read())
 
