@@ -8,11 +8,21 @@ import shutil
 import imageio
 import moviepy.config as mpy_config
 
-os.environ["PATH"] += os.pathsep + "/opt/homebrew/bin"
+# Add the Homebrew bin directory to PATH for the current process
+os.environ["PATH"] = "/opt/homebrew/bin:" + os.environ["PATH"]
 
-imageio.plugins.ffmpeg.FFMPEG_EXE = "/opt/homebrew/bin/ffmpeg"
+# Optionally, set FFMPEG_BINARY for libraries that use it
+os.environ["FFMPEG_BINARY"] = "/opt/homebrew/bin/ffmpeg"
 
-mpy_config.change_settings({"FFMPEG_BINARY": "/opt/homebrew/bin/ffmpeg"})
+try:
+    imageio.plugins.ffmpeg.FFMPEG_EXE = "/opt/homebrew/bin/ffmpeg"
+except ImportError:
+    pass
+
+try:
+    mpy_config.change_settings({"FFMPEG_BINARY": "/opt/homebrew/bin/ffmpeg"})
+except ImportError:
+    pass
 
 st.set_page_config(page_title="Video Screenshot & Tone Analyzer", layout="wide")
 st.title("🎬 Video Screenshot & Tone Analyzer")
