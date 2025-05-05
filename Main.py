@@ -1,3 +1,4 @@
+# Streamlit app with guidance for ffmpeg installation
 import streamlit as st
 import subprocess
 import os
@@ -10,7 +11,7 @@ try:
 except ModuleNotFoundError:
     CLIP_AVAILABLE = False
 
-# Streamlit app title
+# App title
 st.title("🎬 Video Screenshot & Tone Analyzer")
 
 if not CLIP_AVAILABLE:
@@ -22,16 +23,14 @@ video_file = st.file_uploader("Upload a video file", type=["mp4", "mov", "avi"])
 # Parameters
 interval = st.number_input("Frame extraction interval (seconds)", min_value=1, value=10)
 
-# Temporary folders
+# Create folder for screenshots
 screenshot_folder = "./screenshots"
 os.makedirs(screenshot_folder, exist_ok=True)
 
 if CLIP_AVAILABLE:
-    # Load CLIP model
     processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
     model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
 
-    # Define text descriptions for tone analysis
     descriptions = [
         "bright and cheerful",
         "dark and moody",
@@ -48,37 +47,40 @@ if CLIP_AVAILABLE:
         probs = logits_per_image.softmax(dim=1)
         return {desc: round(prob.item(), 3) for desc, prob in zip(text_descriptions, probs[0])}
 
-if video_file is not None:
+# ffmpeg check and user guidance
+ffmpeg_installed = subprocess.run(["which", "ffmpeg"], capture_output=True).returncode == 0
+if not ffmpeg_installed:
+    st.error("❌ ffmpeg is not installed or not found in PATH.")
+    st.write("To install ffmpeg:")
+    st.code("brew install ffmpeg  # on macOS (Homebrew)")
+    st.code("sudo apt-get install ffmpeg  # on Ubuntu/Linux")
+    st.code("choco install ffmpeg  # on Windows (Chocolatey)")
+
+if video_file is not None and ffmpeg_installed:
     video_path = os.path.join(screenshot_folder, video_file.name)
 
-    # Save uploaded video
+    # Save video file
     with open(video_path, "wb") as f:
         f.write(video_file.read())
 
     st.success(f"Video uploaded: {video_file.name}")
 
-    # Extract screenshots button
     if st.button("Extract Screenshots"):
-        # Check if ffmpeg is available
-        if subprocess.run(["which", "ffmpeg"], capture_output=True).returncode != 0:
-            st.error("❌ ffmpeg is not installed or not found in PATH. Please install it.")
-        else:
-            try:
-                command = [
-                    'ffmpeg',
-                    '-i', video_path,
-                    '-vf', f'fps=1/{interval}',
-                    f'{screenshot_folder}/screenshot_%04d.png'
-                ]
-                result = subprocess.run(command, capture_output=True, text=True)
-                if result.returncode != 0:
-                    st.error(f"ffmpeg error: {result.stderr}")
-                else:
-                    st.success("Screenshots extracted!")
-            except Exception as e:
-                st.error(f"Error running ffmpeg: {e}")
+        try:
+            command = [
+                'ffmpeg',
+                '-i', video_path,
+                '-vf', f'fps=1/{interval}',
+                f'{screenshot_folder}/screenshot_%04d.png'
+            ]
+            result = subprocess.run(command, capture_output=True, text=True)
+            if result.returncode != 0:
+                st.error(f"ffmpeg error: {result.stderr}")
+            else:
+                st.success("Screenshots extracted!")
+        except Exception as e:
+            st.error(f"Error running ffmpeg: {e}")
 
-    # Display extracted screenshots
     screenshots = sorted([f for f in os.listdir(screenshot_folder) if f.endswith(".png")])
 
     if screenshots:
@@ -89,7 +91,6 @@ if video_file is not None:
             st.image(img, caption=img_file, use_column_width=True)
 
             if CLIP_AVAILABLE:
-                # Perform CLIP analysis
                 analysis = analyze_with_clip(img_path, descriptions)
                 st.write("🧠 *Tone Analysis Results*:")
                 st.json(analysis)
