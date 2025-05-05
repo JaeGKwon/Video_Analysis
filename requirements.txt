@@ -6,3 +6,4 @@ transformers
 ffmpeg-python
 imageio
 moviepy
+transformers
