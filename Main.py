@@ -9,21 +9,13 @@ import imageio
 import moviepy.config as mpy_config
 
 # Set the full path to ffmpeg for all subprocesses
-os.environ["PATH"] = "/opt/homebrew/bin:" + os.environ.get("PATH", "")
-os.environ["FFMPEG_BINARY"] = "/opt/homebrew/bin/ffmpeg"
+# os.environ["PATH"] = "/opt/homebrew/bin:" + os.environ.get("PATH", "")
+# os.environ["FFMPEG_BINARY"] = "/opt/homebrew/bin/ffmpeg"
 
-try:
-    import imageio
-    imageio.plugins.ffmpeg.download = lambda: None  # Prevents old download attempts
-    imageio.plugins.ffmpeg.FFMPEG_EXE = "/opt/homebrew/bin/ffmpeg"
-except Exception:
-    pass
+# imageio.plugins.ffmpeg.FFMPEG_EXE = "/opt/homebrew/bin/ffmpeg"
 
-try:
-    import moviepy.config as mpy_config
-    mpy_config.change_settings({"FFMPEG_BINARY": "/opt/homebrew/bin/ffmpeg"})
-except Exception:
-    pass
+# import moviepy.config as mpy_config
+# mpy_config.change_settings({"FFMPEG_BINARY": "/opt/homebrew/bin/ffmpeg"})
 
 st.set_page_config(page_title="Video Screenshot & Tone Analyzer", layout="wide")
 st.title("🎬 Video Screenshot & Tone Analyzer")
@@ -118,6 +110,19 @@ if not ffmpeg_path:
     st.stop()
 else:
     st.success(f"✅ Using ffmpeg at: {ffmpeg_path}")
+
+if ffmpeg_path:
+    os.environ["FFMPEG_BINARY"] = ffmpeg_path
+    try:
+        import imageio
+        imageio.plugins.ffmpeg.FFMPEG_EXE = ffmpeg_path
+    except Exception:
+        pass
+    try:
+        import moviepy.config as mpy_config
+        mpy_config.change_settings({"FFMPEG_BINARY": ffmpeg_path})
+    except Exception:
+        pass
 
 # Create screenshot folder
 screenshot_folder = "./screenshots"
