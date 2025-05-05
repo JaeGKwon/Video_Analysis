@@ -13,17 +13,13 @@ except ModuleNotFoundError as e:
     st.error(f"❌ Missing required library: {e.name}. Please install it using pip.")
     st.stop()
 
-# Directly check ffmpeg by running a simple command
-try:
-    ffmpeg_check = subprocess.run(["ffmpeg", "-version"], capture_output=True, text=True)
-    if ffmpeg_check.returncode == 0:
-        st.success("✅ ffmpeg is installed and accessible.")
-    else:
-        st.error("❌ ffmpeg is installed but returned an error on check.")
-        st.stop()
-except FileNotFoundError:
-    st.error("❌ ffmpeg not found in PATH. Please install it and ensure it's accessible.")
+# Manually set ffmpeg path
+ffmpeg_path = "/opt/homebrew/bin/ffmpeg"
+if not os.path.exists(ffmpeg_path):
+    st.error(f"❌ ffmpeg not found at expected path: {ffmpeg_path}")
     st.stop()
+else:
+    st.success(f"✅ Using ffmpeg at: {ffmpeg_path}")
 
 screenshot_folder = "./screenshots"
 os.makedirs(screenshot_folder, exist_ok=True)
@@ -59,7 +55,7 @@ if video_file is not None:
     if st.button("Extract and Analyze Screenshots"):
         try:
             command = [
-                'ffmpeg',
+                ffmpeg_path,
                 '-i', video_path,
                 '-vf', f'fps=1/{interval}',
                 f'{screenshot_folder}/screenshot_%04d.png'
