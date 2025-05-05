@@ -361,10 +361,19 @@ if st.session_state['analysis_report']:
                     st.metric("Spectral Rolloff", 
                              f"{float(audience_data['spectral_characteristics']['rolloff']):.2f}")
 
-    # After the for loop over tabs
-    if st.button("Generate Interpretation"):
-        interpretation = generate_interpretation(st.session_state['analysis_report'])
-        st.info(interpretation)
+    # Place download and generate interpretation buttons side by side
+    col1, col2 = st.columns(2)
+    with col1:
+        st.download_button(
+            label="Download Analysis Report",
+            data=json.dumps(st.session_state['analysis_report'], indent=4, cls=NumpyEncoder),
+            file_name="analysis_report.json",
+            mime="application/json"
+        )
+    with col2:
+        if st.button("Generate Interpretation"):
+            interpretation = generate_interpretation(st.session_state['analysis_report'])
+            st.info(interpretation)
 
 # Footer
 st.markdown("---")
