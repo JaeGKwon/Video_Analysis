@@ -277,7 +277,7 @@ if video_file is not None and st.button("Extract and Analyze Screenshots"):
                                 
                                 with col_img:
                                     img = Image.open(img_path)
-                                    st.image(img, caption=os.path.basename(img_path), use_column_width=True)
+                                    st.image(img, caption=os.path.basename(img_path), use_container_width=True)
                                 
                                 with col_analysis:
                                     st.subheader(f"Tone Analysis: {os.path.basename(img_path)}")
