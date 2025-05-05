@@ -12,6 +12,17 @@ from datetime import datetime
 import json
 import shutil
 
+# Custom JSON encoder for numpy types
+class NumpyEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        if isinstance(obj, np.integer):
+            return int(obj)
+        if isinstance(obj, np.floating):
+            return float(obj)
+        return super(NumpyEncoder, self).default(obj)
+
 # Page configuration
 st.set_page_config(
     page_title="Audio Analysis Dashboard",
@@ -241,15 +252,15 @@ if st.button("Run Analysis", type="primary") and st.session_state['audio_file']:
                 'analysis_types': analysis_types
             })
             
-            # Save report to JSON
+            # Save report to JSON using custom encoder
             report_path = f"analysis_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
             with open(report_path, 'w') as f:
-                json.dump(report, f, indent=4)
+                json.dump(report, f, indent=4, cls=NumpyEncoder)
             
             st.success("Analysis completed successfully!")
             st.download_button(
                 label="Download Analysis Report",
-                data=json.dumps(report, indent=4),
+                data=json.dumps(report, indent=4, cls=NumpyEncoder),
                 file_name=report_path,
                 mime="application/json"
             )
@@ -304,10 +315,10 @@ if st.session_state['analysis_report']:
                 # Display engagement metrics
                 col1, col2 = st.columns(2)
                 with col1:
-                    st.metric("Tempo", f"{engagement_data['tempo']:.1f} BPM")
+                    st.metric("Tempo", f"{float(engagement_data['tempo']):.1f} BPM")
                 with col2:
                     st.metric("Average Pause Duration", 
-                             f"{np.mean(engagement_data['pause_durations']):.2f} seconds")
+                             f"{float(np.mean(engagement_data['pause_durations'])):.2f} seconds")
                 
             elif analysis_types[i] == "Brand Identity":
                 brand_data = st.session_state['analysis_report']['brand_identity']
@@ -315,11 +326,11 @@ if st.session_state['analysis_report']:
                 # Display brand metrics
                 col1, col2, col3 = st.columns(3)
                 with col1:
-                    st.metric("Voice Pitch Mean", f"{brand_data['voice_profile']['pitch_mean']:.2f}")
+                    st.metric("Voice Pitch Mean", f"{float(brand_data['voice_profile']['pitch_mean']):.2f}")
                 with col2:
-                    st.metric("Voice Energy", f"{brand_data['voice_profile']['energy_mean']:.2f}")
+                    st.metric("Voice Energy", f"{float(brand_data['voice_profile']['energy_mean']):.2f}")
                 with col3:
-                    st.metric("Consistency Score", f"{brand_data['consistency_score']:.2f}")
+                    st.metric("Consistency Score", f"{float(brand_data['consistency_score']):.2f}")
                 
             elif analysis_types[i] == "Psychological Impact":
                 psych_data = st.session_state['analysis_report']['psychological_impact']
@@ -327,11 +338,11 @@ if st.session_state['analysis_report']:
                 # Display psychological metrics
                 col1, col2, col3 = st.columns(3)
                 with col1:
-                    st.metric("Speech Rate", f"{psych_data['speech_rate']:.2f} segments/sec")
+                    st.metric("Speech Rate", f"{float(psych_data['speech_rate']):.2f} segments/sec")
                 with col2:
-                    st.metric("Repetition Score", f"{psych_data['repetition_score']:.2f}")
+                    st.metric("Repetition Score", f"{float(psych_data['repetition_score']):.2f}")
                 with col3:
-                    st.metric("Emotional Intensity", f"{psych_data['emotional_intensity']:.2f}")
+                    st.metric("Emotional Intensity", f"{float(psych_data['emotional_intensity']):.2f}")
                 
             elif analysis_types[i] == "Audience Reception":
                 audience_data = st.session_state['analysis_report']['audience_reception']
@@ -339,13 +350,13 @@ if st.session_state['analysis_report']:
                 # Display audience metrics
                 col1, col2 = st.columns(2)
                 with col1:
-                    st.metric("Tempo", f"{audience_data['tempo']:.1f} BPM")
-                    st.metric("Clarity Score", f"{audience_data['clarity_score']:.2f}")
+                    st.metric("Tempo", f"{float(audience_data['tempo']):.1f} BPM")
+                    st.metric("Clarity Score", f"{float(audience_data['clarity_score']):.2f}")
                 with col2:
                     st.metric("Spectral Centroid", 
-                             f"{audience_data['spectral_characteristics']['centroid']:.2f}")
+                             f"{float(audience_data['spectral_characteristics']['centroid']):.2f}")
                     st.metric("Spectral Rolloff", 
-                             f"{audience_data['spectral_characteristics']['rolloff']:.2f}")
+                             f"{float(audience_data['spectral_characteristics']['rolloff']):.2f}")
 
 # Footer
 st.markdown("---")
