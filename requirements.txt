@@ -9,6 +9,7 @@ moviepy
 transformers
 torch
 scikit-learn
+youtube-transcript-api
 librosa>=0.10.0
 numpy>=1.20.0
 matplotlib>=3.5.0
