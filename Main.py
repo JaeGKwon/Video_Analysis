@@ -10,6 +10,8 @@ import moviepy.config as mpy_config
 import numpy as np
 from PIL import Image
 from sklearn.cluster import KMeans
+from transformers import CLIPProcessor, CLIPModel
+import torch
 
 
 # Set the full path to ffmpeg for all subprocesses
@@ -191,6 +193,38 @@ selected_tones = st.multiselect(
 if not selected_tones:
     selected_tones = default_descriptions[:3]  # Default to first 3 if none selected
 
+# Load CLIP model and processor once (at the top of your script)
+clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch16")
+clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch16")
+
+def get_clip_similarity(image, prompts, processor, model):
+    inputs = processor(text=prompts, images=image, return_tensors="pt", padding=True)
+    with torch.no_grad():
+        outputs = model(**inputs)
+        logits_per_image = outputs.logits_per_image
+        probs = logits_per_image.softmax(dim=1).cpu().numpy()[0]
+    return dict(zip(prompts, probs))
+
+def get_dominant_color(image, k=3):
+    img = image.resize((100, 100))
+    arr = np.array(img).reshape((-1, 3))
+    kmeans = KMeans(n_clusters=k, n_init=10)
+    kmeans.fit(arr)
+    colors = kmeans.cluster_centers_.astype(int)
+    return [tuple(color) for color in colors]
+
+def get_sharpness(image):
+    img_gray = image.convert('L')
+    arr = np.array(img_gray)
+    laplacian = np.var(np.gradient(arr))
+    return laplacian
+
+def get_brightness_contrast(image):
+    arr = np.array(image.convert('L'))
+    brightness = np.mean(arr)
+    contrast = np.std(arr)
+    return brightness, contrast
+
 if video_file is not None and st.button("Extract and Analyze Screenshots"):
     if clean_up:
         # Remove all screenshots
@@ -305,6 +339,43 @@ if video_file is not None and st.button("Extract and Analyze Screenshots"):
                                     # Show dominant tone
                                     dominant_tone = max(results, key=results.get)
                                     st.info(f"✨ Dominant tone: **{dominant_tone}**")
+
+                                    # CLIP scene/logo/content detection
+                                    scene_prompts = [
+                                        "a logo on the screen",
+                                        "a person holding a product",
+                                        "a group of people smiling",
+                                        "a close-up of a logo",
+                                        "a product on a table"
+                                    ]
+                                    scene_scores = get_clip_similarity(image, scene_prompts, clip_processor, clip_model)
+
+                                    # Color analysis
+                                    dominant_colors = get_dominant_color(image)
+
+                                    # Sharpness
+                                    sharpness = get_sharpness(image)
+
+                                    # Brightness/Contrast
+                                    brightness, contrast = get_brightness_contrast(image)
+
+                                    # Example: print or display results
+                                    print("Scene scores:", scene_scores)
+                                    print("Dominant colors:", dominant_colors)
+                                    print("Sharpness:", sharpness)
+                                    print("Brightness:", brightness, "Contrast:", contrast)
+
+                                    st.write("**Scene/Logo Detection:**")
+                                    for prompt, prob in scene_scores.items():
+                                        st.write(f"{prompt}: {prob*100:.1f}%")
+
+                                    st.write("**Dominant Colors:**")
+                                    for idx, color in enumerate(dominant_colors, start=1):
+                                        st.color_picker(f"Dominant Color {idx}", value='#%02x%02x%02x' % color, key=f"color{idx}_{img_path}")
+
+                                    st.write(f"**Sharpness:** {sharpness:.2f}")
+                                    st.write(f"**Brightness:** {brightness:.2f}")
+                                    st.write(f"**Contrast:** {contrast:.2f}")
                         else:
                             st.warning("No screenshots were generated.")
             else:
