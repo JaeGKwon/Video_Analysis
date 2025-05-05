@@ -104,18 +104,11 @@ def extract_audio_from_video(video_path, output_path):
             video = VideoFileClip(video_path)
             duration = video.duration
             
-            # Extract audio with progress updates
-            def progress_callback(t):
-                progress = min(1.0, t / duration)
-                progress_bar.progress(progress)
-                status_text.text(f"Processing: {int(progress * 100)}%")
-            
+            # Extract audio
             audio = video.audio
             audio.write_audiofile(
                 output_path,
-                progress_bar=False,
-                logger=None,
-                callback=progress_callback
+                logger=None
             )
             
             video.close()
