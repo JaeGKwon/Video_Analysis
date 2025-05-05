@@ -361,7 +361,7 @@ if st.session_state['analysis_report']:
                     st.metric("Spectral Rolloff", 
                              f"{float(audience_data['spectral_characteristics']['rolloff']):.2f}")
 
-    # Add Generate Interpretation button here
+    # After the for loop over tabs
     if st.button("Generate Interpretation"):
         interpretation = generate_interpretation(st.session_state['analysis_report'])
         st.info(interpretation)
