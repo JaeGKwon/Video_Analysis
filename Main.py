@@ -17,7 +17,7 @@ import imageio
 # import moviepy.config as mpy_config
 # mpy_config.change_settings({"FFMPEG_BINARY": "/opt/homebrew/bin/ffmpeg"})
 
-st.set_page_config(page_title="Video Screenshot & Tone Analyzer", layout="wide")
+st.set_page_config(page_title="Video Screenshot & Tone Analyzer", layout="centered")
 st.title("🎬 Video Screenshot & Tone Analyzer")
 
 # Function to check if a command exists in the system PATH
@@ -133,156 +133,155 @@ if glob.glob(f"{screenshot_folder}/screenshot_*.png"):
             os.remove(file)
         st.success("Previous screenshots removed")
 
-# App interface
-col1, col2 = st.columns([2, 1])
+# Main content area (single column)
+st.markdown("### Video Player")
 
-# Main controls
-with col2:
-    st.header("Controls")
-    video_file = st.file_uploader("Upload a video file", type=["mp4", "mov", "avi", "mkv", "wmv"])
-    
-    if glob.glob(f"{screenshot_folder}/screenshot_*.png"):
-        if st.checkbox("Clean up previous screenshots"):
-            for file in glob.glob(f"{screenshot_folder}/screenshot_*.png"):
-                os.remove(file)
-            st.success("Previous screenshots removed")
-    
-    st.subheader("Extraction Settings")
-    interval = st.number_input("Frame extraction interval (seconds)", 
-                               min_value=1, max_value=300, value=10)
-    
-    max_frames = st.number_input("Maximum frames to extract", 
-                                min_value=1, max_value=50, value=10)
-    
-    st.subheader("Analysis Settings")
-    custom_tone = st.text_input("Add custom tone descriptor:", placeholder="e.g., 'elegant and refined'")
-    
-    default_descriptions = [
-        "bright and cheerful",
-        "dark and moody",
-        "professional and corporate",
-        "casual and playful",
-        "serious and formal"
-    ]
-    
-    if custom_tone:
-        if custom_tone not in default_descriptions:
-            default_descriptions.append(custom_tone)
-    
-    selected_tones = st.multiselect(
-        "Tone categories to analyze:",
-        options=default_descriptions,
-        default=default_descriptions[:3]
+# Show a placeholder if no video is loaded
+if 'video_file' not in st.session_state or st.session_state['video_file'] is None:
+    st.markdown(
+        """
+        <div style="width:480px; height:270px; border:2px dashed #bbb; display:flex; align-items:center; justify-content:center; color:#bbb; font-size:1.2em; margin-bottom:1em;">
+            Video player will appear here
+        </div>
+        """,
+        unsafe_allow_html=True
     )
-    
-    if not selected_tones:
-        selected_tones = default_descriptions[:3]  # Default to first 3 if none selected
+else:
+    st.video(st.session_state['video_file'], format="video/mp4", start_time=0)
 
-# Main content area
-with col1:
-    if video_file is not None:
-        video_path = os.path.join(screenshot_folder, video_file.name)
-        with open(video_path, "wb") as f:
-            f.write(video_file.read())
-        
-        st.success(f"Video uploaded: {video_file.name}")
-        st.video(video_path)
-        
-        if st.button("Extract and Analyze Screenshots"):
-            with st.spinner("Processing video..."):
-                try:
-                    # Get video duration
-                    duration_cmd = [
-                        ffmpeg_path, 
-                        '-i', video_path, 
-                        '-f', 'null', 
-                        '-'
-                    ]
+# Controls under the video area
+st.header("Controls")
+video_file = st.file_uploader("Upload a video file", type=["mp4", "mov", "avi", "mkv", "wmv"])
+if video_file is not None:
+    st.session_state['video_file'] = video_file
+else:
+    st.session_state['video_file'] = None
+
+clean_up = st.checkbox("Clean up previous screenshots")
+interval = st.number_input("Frame extraction interval (seconds)", min_value=1, max_value=300, value=10)
+max_frames = st.number_input("Maximum frames to extract", min_value=1, max_value=50, value=10)
+custom_tone = st.text_input("Add custom tone descriptor:", placeholder="e.g., 'elegant and refined'")
+
+default_descriptions = [
+    "bright and cheerful",
+    "dark and moody",
+    "professional and corporate",
+    "casual and playful",
+    "serious and formal"
+]
+
+if custom_tone:
+    if custom_tone not in default_descriptions:
+        default_descriptions.append(custom_tone)
+
+selected_tones = st.multiselect(
+    "Tone categories to analyze:",
+    options=default_descriptions,
+    default=default_descriptions[:3]
+)
+
+if not selected_tones:
+    selected_tones = default_descriptions[:3]  # Default to first 3 if none selected
+
+if video_file is not None and st.button("Extract and Analyze Screenshots"):
+    if clean_up:
+        for file in glob.glob(f"{screenshot_folder}/screenshot_*.png"):
+            os.remove(file)
+        st.success("Previous screenshots removed")
+    with st.spinner("Processing video..."):
+        try:
+            # Get video duration
+            duration_cmd = [
+                ffmpeg_path, 
+                '-i', video_file.name, 
+                '-f', 'null', 
+                '-'
+            ]
+            
+            result = subprocess.run(duration_cmd, stderr=subprocess.PIPE, text=True)
+            duration_output = result.stderr
+            
+            # Parse duration from ffmpeg output
+            duration = None
+            for line in duration_output.split('\n'):
+                if 'Duration' in line:
+                    time_str = line.split('Duration: ')[1].split(',')[0].strip()
+                    h, m, s = map(float, time_str.split(':'))
+                    duration = h * 3600 + m * 60 + s
+                    break
+            
+            if duration:
+                st.info(f"Video duration: {duration:.2f} seconds")
+                
+                # Calculate frame positions
+                total_frames = int(duration // interval)
+                frames_to_extract = min(total_frames, max_frames)
+                
+                # Use ffmpeg to extract frames
+                command = [
+                    ffmpeg_path,
+                    '-i', video_file.name,
+                    '-vf', f'fps=1/{interval}',
+                    '-frames:v', str(frames_to_extract),
+                    '-q:v', '2',  # Higher quality
+                    f'{screenshot_folder}/screenshot_%04d.png'
+                ]
+                
+                result = subprocess.run(command, capture_output=True, text=True)
+                
+                if result.returncode != 0:
+                    st.error(f"ffmpeg error: {result.stderr}")
+                else:
+                    st.success(f"Extracted {frames_to_extract} screenshots!")
                     
-                    result = subprocess.run(duration_cmd, stderr=subprocess.PIPE, text=True)
-                    duration_output = result.stderr
-                    
-                    # Parse duration from ffmpeg output
-                    duration = None
-                    for line in duration_output.split('\n'):
-                        if 'Duration' in line:
-                            time_str = line.split('Duration: ')[1].split(',')[0].strip()
-                            h, m, s = map(float, time_str.split(':'))
-                            duration = h * 3600 + m * 60 + s
-                            break
-                    
-                    if duration:
-                        st.info(f"Video duration: {duration:.2f} seconds")
-                    
-                        # Calculate frame positions
-                        total_frames = int(duration // interval)
-                        frames_to_extract = min(total_frames, max_frames)
+                    # Load CLIP model for analysis
+                    with st.spinner("Loading CLIP model for analysis..."):
+                        processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+                        model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
                         
-                        # Use ffmpeg to extract frames
-                        command = [
-                            ffmpeg_path,
-                            '-i', video_path,
-                            '-vf', f'fps=1/{interval}',
-                            '-frames:v', str(frames_to_extract),
-                            '-q:v', '2',  # Higher quality
-                            f'{screenshot_folder}/screenshot_%04d.png'
-                        ]
+                        # Analyze screenshots
+                        screenshots = sorted(glob.glob(f"{screenshot_folder}/screenshot_*.png"))
                         
-                        result = subprocess.run(command, capture_output=True, text=True)
-                        
-                        if result.returncode != 0:
-                            st.error(f"ffmpeg error: {result.stderr}")
-                        else:
-                            st.success(f"Extracted {frames_to_extract} screenshots!")
+                        if screenshots:
+                            st.header("Screenshot Analysis")
                             
-                            # Load CLIP model for analysis
-                            with st.spinner("Loading CLIP model for analysis..."):
-                                processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
-                                model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
+                            for img_path in screenshots:
+                                col_img, col_analysis = st.columns([1, 1])
                                 
-                                # Analyze screenshots
-                                screenshots = sorted(glob.glob(f"{screenshot_folder}/screenshot_*.png"))
+                                with col_img:
+                                    img = Image.open(img_path)
+                                    st.image(img, caption=os.path.basename(img_path), use_column_width=True)
                                 
-                                if screenshots:
-                                    st.header("Screenshot Analysis")
+                                with col_analysis:
+                                    st.subheader(f"Tone Analysis: {os.path.basename(img_path)}")
                                     
-                                    for img_path in screenshots:
-                                        col_img, col_analysis = st.columns([1, 1])
-                                        
-                                        with col_img:
-                                            img = Image.open(img_path)
-                                            st.image(img, caption=os.path.basename(img_path), use_column_width=True)
-                                        
-                                        with col_analysis:
-                                            st.subheader(f"Tone Analysis: {os.path.basename(img_path)}")
-                                            
-                                            # Analyze image with CLIP
-                                            image = Image.open(img_path)
-                                            inputs = processor(text=selected_tones, images=image, return_tensors="pt", padding=True)
-                                            outputs = model(**inputs)
-                                            logits_per_image = outputs.logits_per_image
-                                            probs = logits_per_image.softmax(dim=1)
-                                            
-                                            # Create analysis results
-                                            results = {}
-                                            for tone, prob in zip(selected_tones, probs[0]):
-                                                results[tone] = round(float(prob) * 100, 1)  # Convert to percentage
-                                            
-                                            # Sort by probability
-                                            sorted_results = dict(sorted(results.items(), key=lambda x: x[1], reverse=True))
-                                            
-                                            # Display results
-                                            for tone, percentage in sorted_results.items():
-                                                st.write(f"{tone}: {percentage}%")
-                                                st.progress(percentage/100)
-                                            
-                                            # Show dominant tone
-                                            dominant_tone = max(results, key=results.get)
-                                            st.info(f"✨ Dominant tone: **{dominant_tone}**")
-                                else:
-                                    st.warning("No screenshots were generated.")
-                    else:
-                        st.error("Could not determine video duration.")
-                        
-                except Exception as e:
-                    st.error(f"Error processing video: {str(e)}")
+                                    # Analyze image with CLIP
+                                    image = Image.open(img_path)
+                                    inputs = processor(text=selected_tones, images=image, return_tensors="pt", padding=True)
+                                    outputs = model(**inputs)
+                                    logits_per_image = outputs.logits_per_image
+                                    probs = logits_per_image.softmax(dim=1)
+                                    
+                                    # Create analysis results
+                                    results = {}
+                                    for tone, prob in zip(selected_tones, probs[0]):
+                                        results[tone] = round(float(prob) * 100, 1)  # Convert to percentage
+                                    
+                                    # Sort by probability
+                                    sorted_results = dict(sorted(results.items(), key=lambda x: x[1], reverse=True))
+                                    
+                                    # Display results
+                                    for tone, percentage in sorted_results.items():
+                                        st.write(f"{tone}: {percentage}%")
+                                        st.progress(percentage/100)
+                                    
+                                    # Show dominant tone
+                                    dominant_tone = max(results, key=results.get)
+                                    st.info(f"✨ Dominant tone: **{dominant_tone}**")
+                        else:
+                            st.warning("No screenshots were generated.")
+            else:
+                st.error("Could not determine video duration.")
+            
+        except Exception as e:
+            st.error(f"Error processing video: {str(e)}")
