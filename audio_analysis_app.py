@@ -5,9 +5,43 @@ import plotly.graph_objects as go
 import plotly.express as px
 import pandas as pd
 import numpy as np
+from moviepy.editor import VideoFileClip
+import tempfile
+import time
+from datetime import datetime
+import json
 
-st.set_page_config(page_title="Audio Analysis Dashboard", layout="wide")
-st.title("🎵 Audio Analysis Dashboard")
+# Page configuration
+st.set_page_config(
+    page_title="Audio Analysis Dashboard",
+    page_icon="🎵",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# Custom CSS
+st.markdown("""
+    <style>
+    .main {
+        padding: 2rem;
+    }
+    .stProgress > div > div > div {
+        background-color: #4CAF50;
+    }
+    .metric-card {
+        background-color: #f0f2f6;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        margin: 0.5rem 0;
+    }
+    .info-box {
+        background-color: #e8f4f8;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        margin: 1rem 0;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
 # Initialize session state
 if 'audio_file' not in st.session_state:
@@ -16,19 +50,111 @@ if 'analyzer' not in st.session_state:
     st.session_state['analyzer'] = None
 if 'analysis_report' not in st.session_state:
     st.session_state['analysis_report'] = None
+if 'extracted_audio_path' not in st.session_state:
+    st.session_state['extracted_audio_path'] = None
+if 'analysis_history' not in st.session_state:
+    st.session_state['analysis_history'] = []
 
-# File uploader
-st.header("Upload Audio")
-audio_file = st.file_uploader("Upload an audio file", type=["mp3", "wav", "m4a", "ogg"])
-
-if audio_file is not None:
-    # Save the uploaded file temporarily
-    temp_path = f"temp_{audio_file.name}"
-    with open(temp_path, "wb") as f:
-        f.write(audio_file.read())
+# Sidebar
+with st.sidebar:
+    st.title("🎵 Audio Analysis")
+    st.markdown("---")
+    st.markdown("### About")
+    st.markdown("""
+    This tool analyzes audio from videos to provide insights about:
+    - Emotional response
+    - Engagement patterns
+    - Brand identity
+    - Psychological impact
+    - Audience reception
+    """)
     
-    st.session_state['audio_file'] = temp_path
-    st.audio(audio_file, format=f"audio/{audio_file.name.split('.')[-1]}")
+    st.markdown("### Supported Formats")
+    st.markdown("""
+    - Video: MP4, MOV, AVI, MKV, WMV
+    - Audio: WAV (extracted from video)
+    """)
+    
+    if st.session_state['analysis_history']:
+        st.markdown("### Recent Analyses")
+        for i, history in enumerate(st.session_state['analysis_history'][-5:]):
+            st.markdown(f"**{i+1}. {history['timestamp']}**")
+            st.markdown(f"- File: {history['filename']}")
+            st.markdown(f"- Analysis: {', '.join(history['analysis_types'])}")
+
+# Main content
+st.title("🎵 Audio Analysis Dashboard")
+
+# File uploader with drag and drop support
+st.header("Upload Video")
+video_file = st.file_uploader(
+    "Drag and drop a video file here or click to browse",
+    type=["mp4", "mov", "avi", "mkv", "wmv"],
+    help="Upload a video file to analyze its audio content"
+)
+
+def extract_audio_from_video(video_path, output_path):
+    """Extract audio from video file with progress tracking"""
+    try:
+        with st.spinner("Extracting audio from video..."):
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
+            # Initialize video
+            video = VideoFileClip(video_path)
+            duration = video.duration
+            
+            # Extract audio with progress updates
+            def progress_callback(t):
+                progress = min(1.0, t / duration)
+                progress_bar.progress(progress)
+                status_text.text(f"Processing: {int(progress * 100)}%")
+            
+            audio = video.audio
+            audio.write_audiofile(
+                output_path,
+                progress_bar=False,
+                logger=None,
+                callback=progress_callback
+            )
+            
+            video.close()
+            progress_bar.progress(1.0)
+            status_text.text("Audio extraction complete!")
+            time.sleep(1)  # Show completion briefly
+            progress_bar.empty()
+            status_text.empty()
+            
+            return True
+    except Exception as e:
+        st.error(f"Error extracting audio: {str(e)}")
+        return False
+
+if video_file is not None:
+    # Create a temporary directory for processing
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_video_path = os.path.join(temp_dir, f"temp_{video_file.name}")
+        temp_audio_path = os.path.join(temp_dir, f"temp_audio_{os.path.splitext(video_file.name)[0]}.wav")
+        
+        # Save the uploaded file
+        with open(temp_video_path, "wb") as f:
+            f.write(video_file.read())
+        
+        # Extract audio from video
+        if extract_audio_from_video(temp_video_path, temp_audio_path):
+            st.session_state['audio_file'] = temp_audio_path
+            st.session_state['extracted_audio_path'] = temp_audio_path
+            
+            # Display audio player with waveform
+            st.audio(temp_audio_path, format="audio/wav")
+            
+            # Show file information
+            with st.expander("File Information"):
+                video = VideoFileClip(temp_video_path)
+                st.write(f"Duration: {video.duration:.2f} seconds")
+                st.write(f"Resolution: {video.size[0]}x{video.size[1]}")
+                st.write(f"FPS: {video.fps}")
+                video.close()
 
 # Analysis Options
 st.header("Analysis Options")
@@ -36,35 +162,44 @@ analysis_types = st.multiselect(
     "Select analysis types:",
     ["Emotional Response", "Engagement Patterns", "Brand Identity", 
      "Psychological Impact", "Audience Reception"],
-    default=["Emotional Response", "Engagement Patterns"]
+    default=["Emotional Response", "Engagement Patterns"],
+    help="Choose which aspects of the audio to analyze"
 )
 
 # Reference audio for brand identity analysis
 if "Brand Identity" in analysis_types:
     st.subheader("Brand Identity Analysis")
-    reference_audio = st.file_uploader("Upload reference audio for brand comparison", 
-                                     type=["mp3", "wav", "m4a", "ogg"])
-    if reference_audio:
-        ref_path = f"temp_ref_{reference_audio.name}"
-        with open(ref_path, "wb") as f:
-            f.write(reference_audio.read())
-    else:
-        ref_path = None
+    st.info("Using the uploaded video's audio as reference for brand identity analysis")
+    ref_path = st.session_state.get('extracted_audio_path')
 
 # Demographic data for audience reception analysis
 if "Audience Reception" in analysis_types:
     st.subheader("Demographic Data")
-    demographic_data = {
-        "age_group": st.selectbox("Target Age Group", 
-                                ["18-24", "25-34", "35-44", "45-54", "55+"]),
-        "gender": st.multiselect("Target Gender", ["Male", "Female", "Other"]),
-        "region": st.text_input("Target Region", "Global")
-    }
+    col1, col2 = st.columns(2)
+    with col1:
+        demographic_data = {
+            "age_group": st.selectbox(
+                "Target Age Group",
+                ["18-24", "25-34", "35-44", "45-54", "55+"],
+                index=1
+            ),
+            "gender": st.multiselect(
+                "Target Gender",
+                ["Male", "Female", "Other"],
+                default=["Male", "Female"]
+            )
+        }
+    with col2:
+        demographic_data["region"] = st.text_input("Target Region", "US")
+        demographic_data["language"] = st.selectbox(
+            "Primary Language",
+            ["English", "Spanish", "French", "German", "Chinese", "Japanese", "Korean", "Other"]
+        )
 else:
     demographic_data = None
 
 # Analysis Button
-if st.button("Run Analysis") and st.session_state['audio_file']:
+if st.button("Run Analysis", type="primary") and st.session_state['audio_file']:
     with st.spinner("Analyzing audio..."):
         try:
             # Initialize analyzer
@@ -74,26 +209,52 @@ if st.button("Run Analysis") and st.session_state['audio_file']:
             # Run selected analyses
             report = {}
             
-            if "Emotional Response" in analysis_types:
-                report['emotional_response'] = analyzer.emotional_response_analysis()
+            # Create progress bar for analysis
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
+            # Run each analysis with progress updates
+            total_analyses = len(analysis_types)
+            for i, analysis_type in enumerate(analysis_types):
+                status_text.text(f"Running {analysis_type} analysis...")
+                progress_bar.progress((i + 1) / total_analyses)
                 
-            if "Engagement Patterns" in analysis_types:
-                report['engagement_patterns'] = analyzer.engagement_pattern_analysis()
-                
-            if "Brand Identity" in analysis_types:
-                report['brand_identity'] = analyzer.brand_identity_analysis(ref_path)
-                
-            if "Psychological Impact" in analysis_types:
-                report['psychological_impact'] = analyzer.psychological_impact_analysis()
-                
-            if "Audience Reception" in analysis_types:
-                report['audience_reception'] = analyzer.audience_reception_analysis(demographic_data)
+                if analysis_type == "Emotional Response":
+                    report['emotional_response'] = analyzer.emotional_response_analysis()
+                elif analysis_type == "Engagement Patterns":
+                    report['engagement_patterns'] = analyzer.engagement_pattern_analysis()
+                elif analysis_type == "Brand Identity":
+                    report['brand_identity'] = analyzer.brand_identity_analysis(ref_path)
+                elif analysis_type == "Psychological Impact":
+                    report['psychological_impact'] = analyzer.psychological_impact_analysis()
+                elif analysis_type == "Audience Reception":
+                    report['audience_reception'] = analyzer.audience_reception_analysis(demographic_data)
             
             st.session_state['analysis_report'] = report
+            
+            # Add to analysis history
+            st.session_state['analysis_history'].append({
+                'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                'filename': video_file.name,
+                'analysis_types': analysis_types
+            })
+            
+            # Save report to JSON
+            report_path = f"analysis_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+            with open(report_path, 'w') as f:
+                json.dump(report, f, indent=4)
+            
             st.success("Analysis completed successfully!")
+            st.download_button(
+                label="Download Analysis Report",
+                data=json.dumps(report, indent=4),
+                file_name=report_path,
+                mime="application/json"
+            )
             
         except Exception as e:
             st.error(f"Error during analysis: {str(e)}")
+            st.error("Please try again with a different file or contact support if the issue persists.")
 
 # Display Results
 if st.session_state['analysis_report']:
@@ -114,10 +275,13 @@ if st.session_state['analysis_report']:
                                        name='Energy', line=dict(color='blue')))
                 fig.add_trace(go.Scatter(x=emotional_arc['time'], y=emotional_arc['pitch'],
                                        name='Pitch', line=dict(color='red')))
-                fig.update_layout(title='Emotional Arc Over Time',
-                                xaxis_title='Time (seconds)',
-                                yaxis_title='Intensity')
-                st.plotly_chart(fig)
+                fig.update_layout(
+                    title='Emotional Arc Over Time',
+                    xaxis_title='Time (seconds)',
+                    yaxis_title='Intensity',
+                    template='plotly_white'
+                )
+                st.plotly_chart(fig, use_container_width=True)
                 
             elif analysis_types[i] == "Engagement Patterns":
                 engagement_data = st.session_state['analysis_report']['engagement_patterns']
@@ -127,10 +291,13 @@ if st.session_state['analysis_report']:
                 fig.add_trace(go.Scatter(x=engagement_data['attention_triggers'],
                                        y=[1]*len(engagement_data['attention_triggers']),
                                        mode='markers', name='Attention Triggers'))
-                fig.update_layout(title='Attention Triggers Over Time',
-                                xaxis_title='Time (seconds)',
-                                yaxis_title='Trigger Points')
-                st.plotly_chart(fig)
+                fig.update_layout(
+                    title='Attention Triggers Over Time',
+                    xaxis_title='Time (seconds)',
+                    yaxis_title='Trigger Points',
+                    template='plotly_white'
+                )
+                st.plotly_chart(fig, use_container_width=True)
                 
                 # Display engagement metrics
                 col1, col2 = st.columns(2)
@@ -178,8 +345,11 @@ if st.session_state['analysis_report']:
                     st.metric("Spectral Rolloff", 
                              f"{audience_data['spectral_characteristics']['rolloff']:.2f}")
 
-# Cleanup
-if st.session_state['audio_file'] and os.path.exists(st.session_state['audio_file']):
-    os.remove(st.session_state['audio_file'])
-if 'ref_path' in locals() and os.path.exists(ref_path):
-    os.remove(ref_path) 
+# Footer
+st.markdown("---")
+st.markdown("""
+<div style='text-align: center'>
+    <p>Audio Analysis Dashboard | Created with Streamlit</p>
+    <p>For support or feedback, please contact the development team</p>
+</div>
+""", unsafe_allow_html=True) 
