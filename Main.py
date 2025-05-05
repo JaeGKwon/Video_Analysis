@@ -22,9 +22,6 @@ os.makedirs(screenshot_folder, exist_ok=True)
 video_file = st.file_uploader("Upload a video file", type=["mp4", "mov", "avi"])
 interval = st.number_input("Frame extraction interval (seconds)", min_value=1, value=10)
 
-if st.button("Clear Inputs"):
-    st.experimental_rerun()
-
 if CLIP_AVAILABLE:
     processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
     model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
@@ -83,11 +80,10 @@ if video_file is not None and ffmpeg_installed:
             img = Image.open(img_path)
             st.image(img, caption=os.path.basename(img_path), use_column_width=True)
 
-            if CLIP_AVAILABLE:
+        if CLIP_AVAILABLE and st.button("Analyze Screenshots"):
+            for img_path in screenshots:
                 analysis = analyze_with_clip(img_path, descriptions)
-                st.write("🧠 *Tone Analysis Results*:")
+                st.write(f"🧠 *Tone Analysis for {os.path.basename(img_path)}*:")
                 st.json(analysis)
-            else:
-                st.info("Install 'transformers' and 'torch' to enable tone analysis.")
     else:
         st.info("No screenshots yet. Click the button above to generate them.")
