@@ -264,7 +264,7 @@ if st.button("Run Analysis", type="primary") and st.session_state['audio_file']:
                 mime="application/json"
             )
             
-            if st.button("Generate Interpretation"):
+            if st.button("Generate Interpretation", key="generate_interpretation_btn"):
                 interpretation = generate_interpretation(report)
                 st.info(interpretation)
             
@@ -371,7 +371,7 @@ if st.session_state['analysis_report']:
             mime="application/json"
         )
     with col2:
-        if st.button("Generate Interpretation"):
+        if st.button("Generate Interpretation", key="generate_interpretation_btn"):
             interpretation = generate_interpretation(st.session_state['analysis_report'])
             st.info(interpretation)
 
