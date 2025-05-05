@@ -1,19 +1,7 @@
-✅ Here’s the updated `requirements.txt` for this project:
 
-```
 streamlit
 pillow
 torch
 transformers
 ffmpeg-python
 imageio
-```
-
-**What’s new or important:**
-- `streamlit`: runs the app
-- `pillow`: handles image loading and manipulation (PIL)
-- `torch`: backend required for transformers
-- `transformers`: needed for CLIP model
-- `ffmpeg-python`: optional, but can help manage ffmpeg calls in Python if you later switch from subprocess
-
-Remember, you still need to install the actual `ffmpeg` binary separately — it’s **not a Python library** and must be on your system PATH.
