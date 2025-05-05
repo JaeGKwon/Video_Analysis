@@ -35,15 +35,20 @@ else:
 def generate_interpretation(report):
     try:
         prompt = (
-            "Given the following audio analysis results, provide a concise interpretation for a non-technical user:\n"
+            "Given the following audio analysis results, provide a concise interpretation for a non-technical user. "
+            "Evaluate the audio from a user perspective (e.g., 'the music was too intense', 'the narration was clear', etc.). "
+            "Also, provide at least one suggestion for what could be improved in the audio to enhance user experience. "
+            "\nResults:\n"
             f"{report}\n"
-            "What are the key emotional moments and what do they mean?"
+            "\nFormat your answer as follows:\n"
+            "User Perspective: <your summary>\n"
+            "What Can Be Done Better: <your suggestion>"
         )
         client = openai.OpenAI(api_key=openai.api_key)
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",  # or "gpt-4"
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=200
+            max_tokens=300
         )
         return response.choices[0].message.content
     except Exception as e:
@@ -269,19 +274,11 @@ if st.button("Run Analysis", type="primary") and st.session_state['audio_file']:
             
             st.session_state['analysis_report'] = report
             
-            # Add to analysis history
-            #st.session_state['analysis_history'].append({
-            #    'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            #    'filename': video_file.name,
-            #    'analysis_types': analysis_types
-            #})
-            
-            # Save report to JSON using custom encoder
-            report_path = f"analysis_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-            with open(report_path, 'w') as f:
-                json.dump(report, f, indent=4, cls=NumpyEncoder)
-            
-            st.success("Analysis completed successfully!")
+            # Automatically generate interpretation after analysis
+            with st.spinner("Generating interpretation with LLM..."):
+                interpretation = generate_interpretation(report)
+                st.session_state['interpretation'] = interpretation
+            st.success("Analysis and interpretation completed successfully!")
             
         except Exception as e:
             st.error(f"Error during analysis: {str(e)}")
@@ -376,10 +373,10 @@ if st.session_state['analysis_report']:
                     st.metric("Spectral Rolloff", 
                              f"{float(audience_data['spectral_characteristics']['rolloff']):.2f}")
 
-    # Only one Generate Interpretation button, not in columns
-    if st.button("Generate Interpretation", key="generate_interpretation_btn_final"):
-        interpretation = generate_interpretation(st.session_state['analysis_report'])
-        st.info(interpretation)
+    # Show interpretation if available
+    if 'interpretation' in st.session_state and st.session_state['interpretation']:
+        st.subheader("LLM Evaluation & Suggestions")
+        st.info(st.session_state['interpretation'])
 
 # Footer
 st.markdown("---")
