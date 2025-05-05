@@ -108,8 +108,6 @@ if not ffmpeg_path:
         3. Add the bin folder to your PATH or specify the full path above
         """)
     st.stop()
-else:
-    st.success(f"✅ Using ffmpeg at: {ffmpeg_path}")
 
 if ffmpeg_path:
     os.environ["FFMPEG_BINARY"] = ffmpeg_path
@@ -142,6 +140,12 @@ col1, col2 = st.columns([2, 1])
 with col2:
     st.header("Controls")
     video_file = st.file_uploader("Upload a video file", type=["mp4", "mov", "avi", "mkv", "wmv"])
+    
+    if glob.glob(f"{screenshot_folder}/screenshot_*.png"):
+        if st.checkbox("Clean up previous screenshots"):
+            for file in glob.glob(f"{screenshot_folder}/screenshot_*.png"):
+                os.remove(file)
+            st.success("Previous screenshots removed")
     
     st.subheader("Extraction Settings")
     interval = st.number_input("Frame extraction interval (seconds)", 
@@ -282,26 +286,3 @@ with col1:
                         
                 except Exception as e:
                     st.error(f"Error processing video: {str(e)}")
-    else:
-        st.info("Please upload a video file to begin.")
-        
-        with st.expander("About this app"):
-            st.markdown("""
-            ## Video Screenshot & Tone Analyzer
-            
-            This app helps you analyze the visual tone of your videos by:
-            
-            1. Extracting screenshots at regular intervals
-            2. Using CLIP (Contrastive Language-Image Pre-Training) to analyze each frame
-            3. Identifying the dominant visual tone in each screenshot
-            
-            ### Use cases:
-            - Analyze brand consistency in marketing videos
-            - Evaluate the emotional journey of a film
-            - Ensure visual tone matches intended messaging
-            - Identify key moments for thumbnails
-            
-            ### Requirements:
-            - ffmpeg must be installed
-            - Python packages: streamlit, Pillow, transformers, torch
-            """)
