@@ -6,7 +6,7 @@ import platform
 from pathlib import Path
 import shutil
 import imageio
-import moviepy.config as mpy_config
+
 
 # Set the full path to ffmpeg for all subprocesses
 # os.environ["PATH"] = "/opt/homebrew/bin:" + os.environ.get("PATH", "")
