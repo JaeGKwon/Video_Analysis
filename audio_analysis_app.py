@@ -178,12 +178,10 @@ analysis_types = st.multiselect(
 
 # Reference audio for brand identity analysis
 if "Brand Identity" in analysis_types:
-    st.subheader("Brand Identity Analysis")
     ref_path = st.session_state.get('extracted_audio_path')
 
 # Demographic data for audience reception analysis
 if "Audience Reception" in analysis_types:
-    st.subheader("Demographic Data")
     col1, col2 = st.columns(2)
     with col1:
         demographic_data = {
