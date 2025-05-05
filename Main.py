@@ -59,14 +59,24 @@ if video_file is not None:
 
     # Extract screenshots button
     if st.button("Extract Screenshots"):
-        command = [
-            'ffmpeg',
-            '-i', video_path,
-            '-vf', f'fps=1/{interval}',
-            f'{screenshot_folder}/screenshot_%04d.png'
-        ]
-        subprocess.run(command)
-        st.success("Screenshots extracted!")
+        # Check if ffmpeg is available
+        if subprocess.run(["which", "ffmpeg"], capture_output=True).returncode != 0:
+            st.error("❌ ffmpeg is not installed or not found in PATH. Please install it.")
+        else:
+            try:
+                command = [
+                    'ffmpeg',
+                    '-i', video_path,
+                    '-vf', f'fps=1/{interval}',
+                    f'{screenshot_folder}/screenshot_%04d.png'
+                ]
+                result = subprocess.run(command, capture_output=True, text=True)
+                if result.returncode != 0:
+                    st.error(f"ffmpeg error: {result.stderr}")
+                else:
+                    st.success("Screenshots extracted!")
+            except Exception as e:
+                st.error(f"Error running ffmpeg: {e}")
 
     # Display extracted screenshots
     screenshots = sorted([f for f in os.listdir(screenshot_folder) if f.endswith(".png")])
