@@ -56,7 +56,7 @@ if video_file is not None and ffmpeg_installed:
 
     st.success(f"Video uploaded: {video_file.name}")
 
-    if st.button("Extract Screenshots"):
+    if st.button("Extract and Analyze Screenshots"):
         try:
             command = [
                 'ffmpeg',
@@ -69,21 +69,22 @@ if video_file is not None and ffmpeg_installed:
                 st.error(f"ffmpeg error: {result.stderr}")
             else:
                 st.success("Screenshots extracted!")
+
+                screenshots = sorted(glob.glob(f"{screenshot_folder}/screenshot_*.png"))
+
+                if screenshots:
+                    st.header("Sample Screenshots")
+                    for img_path in screenshots:
+                        img = Image.open(img_path)
+                        st.image(img, caption=os.path.basename(img_path), use_column_width=True)
+
+                        if CLIP_AVAILABLE:
+                            analysis = analyze_with_clip(img_path, descriptions)
+                            st.write(f"🧠 *Tone Analysis for {os.path.basename(img_path)}*:")
+                            st.json(analysis)
+                else:
+                    st.info("No screenshots were generated.")
         except Exception as e:
             st.error(f"Error running ffmpeg: {e}")
-
-    screenshots = sorted(glob.glob(f"{screenshot_folder}/screenshot_*.png"))
-
-    if screenshots:
-        st.header("Sample Screenshots")
-        for img_path in screenshots:
-            img = Image.open(img_path)
-            st.image(img, caption=os.path.basename(img_path), use_column_width=True)
-
-        if CLIP_AVAILABLE and st.button("Analyze Screenshots"):
-            for img_path in screenshots:
-                analysis = analyze_with_clip(img_path, descriptions)
-                st.write(f"🧠 *Tone Analysis for {os.path.basename(img_path)}*:")
-                st.json(analysis)
-    else:
-        st.info("No screenshots yet. Click the button above to generate them.")
+else:
+    st.info("Upload a video file and ensure ffmpeg is installed to begin.")
