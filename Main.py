@@ -5,6 +5,14 @@ import glob
 import platform
 from pathlib import Path
 import shutil
+import imageio
+import moviepy.config as mpy_config
+
+os.environ["PATH"] += os.pathsep + "/opt/homebrew/bin"
+
+imageio.plugins.ffmpeg.FFMPEG_EXE = "/opt/homebrew/bin/ffmpeg"
+
+mpy_config.change_settings({"FFMPEG_BINARY": "/opt/homebrew/bin/ffmpeg"})
 
 st.set_page_config(page_title="Video Screenshot & Tone Analyzer", layout="wide")
 st.title("🎬 Video Screenshot & Tone Analyzer")
