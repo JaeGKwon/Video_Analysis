@@ -194,10 +194,21 @@ if video_file is not None and st.button("Extract and Analyze Screenshots"):
         st.success("Previous screenshots removed")
     with st.spinner("Processing video..."):
         try:
+            # Save the video file to the screenshot folder
+            video_path = os.path.join(screenshot_folder, video_file.name)
+            with open(video_path, "wb") as f:
+                f.write(video_file.read())
+            
+            if not os.path.exists(video_path):
+                st.error(f"Video file not found at {video_path}")
+                st.stop()
+            
+            st.write(f"Video path: {video_path}")
+            
             # Get video duration
             duration_cmd = [
                 ffmpeg_path, 
-                '-i', video_file.name, 
+                '-i', video_path, 
                 '-f', 'null', 
                 '-'
             ]
@@ -224,7 +235,7 @@ if video_file is not None and st.button("Extract and Analyze Screenshots"):
                 # Use ffmpeg to extract frames
                 command = [
                     ffmpeg_path,
-                    '-i', video_file.name,
+                    '-i', video_path,
                     '-vf', f'fps=1/{interval}',
                     '-frames:v', str(frames_to_extract),
                     '-q:v', '2',  # Higher quality
