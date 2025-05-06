@@ -51,12 +51,6 @@ try:
 except ModuleNotFoundError:
     missing_packages.append("Pillow")
 
-try:
-    from transformers import CLIPProcessor, CLIPModel
-    import torch
-except ModuleNotFoundError as e:
-    missing_packages.append(e.name)
-
 if missing_packages:
     with st.error("❌ Missing required libraries:"):
         for package in missing_packages:
