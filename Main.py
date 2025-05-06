@@ -12,12 +12,8 @@ import imageio
 import moviepy.config as mpy_config
 import numpy as np
 from PIL import Image
-from sklearn.cluster import KMeans
-import torch
 import openai
 import base64
-import time
-import clip
 
 # =============================
 # Environment and Dependency Checks
@@ -211,83 +207,9 @@ selected_tones = st.multiselect(
 if not selected_tones:
     selected_tones = default_descriptions[:3]  # Default to first 3 if none selected
 
-# Load CLIP model and processor once (at the top of your script)
-device = "cuda" if torch.cuda.is_available() else "cpu"
-model, preprocess = clip.load("ViT-B/32", device=device)
-
 # =============================
 # Image Analysis Functions
 # =============================
-def get_clip_similarity(image, prompts, processor, model):
-    """
-    Compute CLIP similarity scores between an image and a list of text prompts.
-    Args:
-        image (PIL.Image): The image to analyze.
-        prompts (list): List of text prompts.
-        processor: CLIP processor instance.
-        model: CLIP model instance.
-    Returns:
-        dict: Mapping from prompt to similarity probability.
-    """
-    image_input = preprocess(image).unsqueeze(0).to(device)
-    text_inputs = clip.tokenize(prompts).to(device)
-    
-    with torch.no_grad():
-        image_features = model.encode_image(image_input)
-        text_features = model.encode_text(text_inputs)
-        
-        # Normalize features
-        image_features /= image_features.norm(dim=-1, keepdim=True)
-        text_features /= text_features.norm(dim=-1, keepdim=True)
-        
-        # Calculate similarity
-        similarity = (100.0 * image_features @ text_features.T).softmax(dim=-1)
-        probs = similarity.cpu().numpy()[0]
-    
-    return dict(zip(prompts, probs))
-
-def get_dominant_color(image, k=3):
-    """
-    Find the k dominant colors in an image using KMeans clustering.
-    Args:
-        image (PIL.Image): The image to analyze.
-        k (int): Number of dominant colors to find.
-    Returns:
-        list: List of RGB tuples representing dominant colors.
-    """
-    img = image.resize((100, 100))
-    arr = np.array(img).reshape((-1, 3))
-    kmeans = KMeans(n_clusters=k, n_init=10)
-    kmeans.fit(arr)
-    colors = kmeans.cluster_centers_.astype(int)
-    return [tuple(color) for color in colors]
-
-def get_sharpness(image):
-    """
-    Calculate the sharpness of an image using the variance of the gradient.
-    Args:
-        image (PIL.Image): The image to analyze.
-    Returns:
-        float: Sharpness value (higher means sharper).
-    """
-    img_gray = image.convert('L')
-    arr = np.array(img_gray)
-    laplacian = np.var(np.gradient(arr))
-    return laplacian
-
-def get_brightness_contrast(image):
-    """
-    Calculate the brightness and contrast of an image.
-    Args:
-        image (PIL.Image): The image to analyze.
-    Returns:
-        tuple: (brightness, contrast)
-    """
-    arr = np.array(image.convert('L'))
-    brightness = np.mean(arr)
-    contrast = np.std(arr)
-    return brightness, contrast
-
 def get_image_description_gpt4v(image_path):
     """
     Generate a creative storyboard description for an image using GPT-4 Vision.
@@ -320,53 +242,19 @@ def get_image_description_gpt4v(image_path):
     )
     return response.choices[0].message.content
 
-def analyze_image(img_path, selected_tones, processor, model, clip_processor, clip_model):
+def analyze_image(img_path, selected_tones=None, processor=None, model=None, clip_processor=None, clip_model=None):
     """
-    Perform all analyses on a single image and return results as a dict.
+    Perform all analyses on a single image using GPT-4 Vision and return results as a dict.
     """
     image = Image.open(img_path)
-    # Tone analysis with CLIP
-    image_input = preprocess(image).unsqueeze(0).to(device)
-    text_inputs = clip.tokenize(selected_tones).to(device)
-    
-    with torch.no_grad():
-        image_features = model.encode_image(image_input)
-        text_features = model.encode_text(text_inputs)
-        
-        # Normalize features
-        image_features /= image_features.norm(dim=-1, keepdim=True)
-        text_features /= text_features.norm(dim=-1, keepdim=True)
-        
-        # Calculate similarity
-        similarity = (100.0 * image_features @ text_features.T).softmax(dim=-1)
-        probs = similarity.cpu().numpy()[0]
-    
-    results = {tone: round(float(prob) * 100, 1) for tone, prob in zip(selected_tones, probs)}
-    sorted_results = dict(sorted(results.items(), key=lambda x: x[1], reverse=True))
-    dominant_tone = max(results, key=results.get)
-    
-    # Scene/logo detection
-    scene_prompts = [
-        "a logo on the screen",
-        "a person holding a product",
-        "a group of people smiling",
-        "a close-up of a logo",
-        "a product on a table"
-    ]
-    scene_scores = get_clip_similarity(image, scene_prompts, preprocess, model)
-    
-    # Color analysis
-    dominant_colors = get_dominant_color(image)
-    # Sharpness
-    sharpness = get_sharpness(image)
-    # Brightness/Contrast
-    brightness, contrast = get_brightness_contrast(image)
+    # Use GPT-4 Vision for scene/tone description
+    description = get_image_description_gpt4v(img_path)
+    # Optionally, add basic color/brightness/sharpness using PIL/numpy
+    arr = np.array(image.convert('L'))
+    brightness = float(np.mean(arr))
+    contrast = float(np.std(arr))
     return {
-        "sorted_results": sorted_results,
-        "dominant_tone": dominant_tone,
-        "scene_scores": scene_scores,
-        "dominant_colors": dominant_colors,
-        "sharpness": sharpness,
+        "description": description,
         "brightness": brightness,
         "contrast": contrast,
         "image": image
@@ -436,7 +324,7 @@ if video_file is not None and st.button("Extract and Analyze Screenshots"):
                     st.success(f"Extracted {frames_to_extract} screenshots!")
                     # Load CLIP model for analysis
                     with st.spinner("Loading CLIP model for analysis..."):
-                        processor = preprocess
+                        processor = None
                         screenshots = sorted(glob.glob(f"{screenshot_folder}/screenshot_*.png"))
                         if screenshots:
                             st.header("Screenshot Analysis")
@@ -448,19 +336,9 @@ if video_file is not None and st.button("Extract and Analyze Screenshots"):
                                     st.image(img, caption=os.path.basename(img_path), use_container_width=True)
                                 with col_analysis:
                                     st.subheader(f"Tone Analysis: {os.path.basename(img_path)}")
-                                    analysis = analyze_image(img_path, selected_tones, processor, model, preprocess, model)
+                                    analysis = analyze_image(img_path, selected_tones, processor, None, None, None)
                                     # Display results
-                                    for tone, percentage in analysis["sorted_results"].items():
-                                        st.write(f"{tone}: {percentage}%")
-                                        st.progress(percentage/100)
-                                    st.info(f"✨ Dominant tone: **{analysis['dominant_tone']}**")
-                                    st.write("**Scene/Logo Detection:**")
-                                    for prompt, prob in analysis["scene_scores"].items():
-                                        st.write(f"{prompt}: {prob*100:.1f}%")
-                                    st.write("**Dominant Colors:**")
-                                    for idx2, color in enumerate(analysis["dominant_colors"], start=1):
-                                        st.color_picker(f"Dominant Color {idx2}", value='#%02x%02x%02x' % color, key=f"color{idx2}_{img_path}")
-                                    st.write(f"**Sharpness:** {analysis['sharpness']:.2f}")
+                                    st.info(f"✨ Scene description: **{analysis['description']}**")
                                     st.write(f"**Brightness:** {analysis['brightness']:.2f}")
                                     st.write(f"**Contrast:** {analysis['contrast']:.2f}")
                                     # Generate storyboard description using GPT-4 Vision

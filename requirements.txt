@@ -1,9 +1,6 @@
 streamlit==1.32.0
 openai==1.12.0
 pillow==10.2.0
-torch==2.2.0
-torchvision==0.17.0
-transformers==4.38.2
 ffmpeg-python==0.2.0
 imageio==2.33.1
 moviepy==1.0.3
@@ -20,4 +17,3 @@ pandas==2.2.1
 ftfy==6.1.1
 regex
 tqdm==4.66.2
-git+https://github.com/openai/CLIP.git
