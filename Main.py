@@ -278,175 +278,6 @@ def get_brightness_contrast(image):
     contrast = np.std(arr)
     return brightness, contrast
 
-# =============================
-# Screenshot Extraction & Analysis
-# =============================
-if video_file is not None and st.button("Extract and Analyze Screenshots"):
-    if clean_up:
-        # Remove all screenshots
-        for file in glob.glob(f"{screenshot_folder}/screenshot_*.png"):
-            os.remove(file)
-        # Remove all video files in the main directory and screenshots folder
-        video_extensions = ["*.mp4", "*.mov", "*.avi", "*.mkv", "*.wmv", "*.mpeg", "*.mpg"]
-        for ext in video_extensions:
-            for file in glob.glob(ext):
-                os.remove(file)
-            for file in glob.glob(os.path.join(screenshot_folder, ext)):
-                os.remove(file)
-        st.success("Previous screenshots and uploaded video files removed.")
-    with st.spinner("Processing video..."):
-        try:
-            # Save the video file to the screenshot folder
-            video_path = os.path.join(screenshot_folder, video_file.name)
-            with open(video_path, "wb") as f:
-                f.write(video_file.read())
-            
-            if not os.path.exists(video_path):
-                st.error(f"Video file not found at {video_path}")
-                st.stop()
-            
-            st.write(f"Video path: {video_path}")
-            
-            # Get video duration
-            duration_cmd = [
-                ffmpeg_path, 
-                '-i', video_path, 
-                '-f', 'null', 
-                '-'
-            ]
-            
-            result = subprocess.run(duration_cmd, stderr=subprocess.PIPE, text=True)
-            duration_output = result.stderr
-            
-            # Parse duration from ffmpeg output
-            duration = None
-            for line in duration_output.split('\n'):
-                if 'Duration' in line:
-                    time_str = line.split('Duration: ')[1].split(',')[0].strip()
-                    h, m, s = map(float, time_str.split(':'))
-                    duration = h * 3600 + m * 60 + s
-                    break
-            
-            if duration:
-                st.info(f"Video duration: {duration:.2f} seconds")
-                
-                # Calculate frame positions
-                total_frames = int(duration // interval)
-                frames_to_extract = min(total_frames, max_frames)
-                
-                # Use ffmpeg to extract frames
-                command = [
-                    ffmpeg_path,
-                    '-i', video_path,
-                    '-vf', f'fps=1/{interval}',
-                    '-frames:v', str(frames_to_extract),
-                    '-q:v', '2',  # Higher quality
-                    f'{screenshot_folder}/screenshot_%04d.png'
-                ]
-                
-                result = subprocess.run(command, capture_output=True, text=True)
-                
-                if result.returncode != 0:
-                    st.error(f"ffmpeg error: {result.stderr}")
-                else:
-                    st.success(f"Extracted {frames_to_extract} screenshots!")
-                    
-                    # Load CLIP model for analysis
-                    with st.spinner("Loading CLIP model for analysis..."):
-                        processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
-                        model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
-                        
-                        # Analyze screenshots
-                        screenshots = sorted(glob.glob(f"{screenshot_folder}/screenshot_*.png"))
-                        
-                        if screenshots:
-                            st.header("Screenshot Analysis")
-                            
-                            for img_path in screenshots:
-                                col_img, col_analysis = st.columns([1, 1])
-                                
-                                with col_img:
-                                    img = Image.open(img_path)
-                                    st.image(img, caption=os.path.basename(img_path), use_container_width=True)
-                                
-                                with col_analysis:
-                                    st.subheader(f"Tone Analysis: {os.path.basename(img_path)}")
-                                    
-                                    # Analyze image with CLIP
-                                    image = Image.open(img_path)
-                                    inputs = processor(text=selected_tones, images=image, return_tensors="pt", padding=True)
-                                    outputs = model(**inputs)
-                                    logits_per_image = outputs.logits_per_image
-                                    probs = logits_per_image.softmax(dim=1)
-                                    
-                                    # Create analysis results
-                                    results = {}
-                                    for tone, prob in zip(selected_tones, probs[0]):
-                                        results[tone] = round(float(prob) * 100, 1)  # Convert to percentage
-                                    
-                                    # Sort by probability
-                                    sorted_results = dict(sorted(results.items(), key=lambda x: x[1], reverse=True))
-                                    
-                                    # Display results
-                                    for tone, percentage in sorted_results.items():
-                                        st.write(f"{tone}: {percentage}%")
-                                        st.progress(percentage/100)
-                                    
-                                    # Show dominant tone
-                                    dominant_tone = max(results, key=results.get)
-                                    st.info(f"✨ Dominant tone: **{dominant_tone}**")
-
-                                    # CLIP scene/logo/content detection
-                                    scene_prompts = [
-                                        "a logo on the screen",
-                                        "a person holding a product",
-                                        "a group of people smiling",
-                                        "a close-up of a logo",
-                                        "a product on a table"
-                                    ]
-                                    scene_scores = get_clip_similarity(image, scene_prompts, clip_processor, clip_model)
-
-                                    # Color analysis
-                                    dominant_colors = get_dominant_color(image)
-
-                                    # Sharpness
-                                    sharpness = get_sharpness(image)
-
-                                    # Brightness/Contrast
-                                    brightness, contrast = get_brightness_contrast(image)
-
-                                    # Example: print or display results
-                                    print("Scene scores:", scene_scores)
-                                    print("Dominant colors:", dominant_colors)
-                                    print("Sharpness:", sharpness)
-                                    print("Brightness:", brightness, "Contrast:", contrast)
-
-                                    st.write("**Scene/Logo Detection:**")
-                                    for prompt, prob in scene_scores.items():
-                                        st.write(f"{prompt}: {prob*100:.1f}%")
-
-                                    st.write("**Dominant Colors:**")
-                                    for idx, color in enumerate(dominant_colors, start=1):
-                                        st.color_picker(f"Dominant Color {idx}", value='#%02x%02x%02x' % color, key=f"color{idx}_{img_path}")
-
-                                    st.write(f"**Sharpness:** {sharpness:.2f}")
-                                    st.write(f"**Brightness:** {brightness:.2f}")
-                                    st.write(f"**Contrast:** {contrast:.2f}")
-                        else:
-                            st.warning("No screenshots were generated.")
-            else:
-                st.error("Could not determine video duration.")
-                st.code(duration_output)  # This will show the ffmpeg output in the Streamlit app
-            
-        except Exception as e:
-            st.error(f"Error processing video: {str(e)}")
-
-# Set your OpenAI API key (use st.secrets in production)
-openai.api_key = st.secrets["OPENAI_API_KEY"]
-
-# =============================
-# GPT-4 Vision Storyboard Description
-# =============================
 def get_image_description_gpt4v(image_path):
     """
     Generate a creative storyboard description for an image using GPT-4 Vision.
@@ -479,48 +310,162 @@ def get_image_description_gpt4v(image_path):
     )
     return response.choices[0].message.content
 
-st.title("Batch Storyboard Generator (GPT-4 Vision)")
+def analyze_image(img_path, selected_tones, processor, model, clip_processor, clip_model):
+    """
+    Perform all analyses on a single image and return results as a dict.
+    """
+    image = Image.open(img_path)
+    # Tone analysis with CLIP
+    inputs = processor(text=selected_tones, images=image, return_tensors="pt", padding=True)
+    outputs = model(**inputs)
+    logits_per_image = outputs.logits_per_image
+    probs = logits_per_image.softmax(dim=1)
+    results = {tone: round(float(prob) * 100, 1) for tone, prob in zip(selected_tones, probs[0])}
+    sorted_results = dict(sorted(results.items(), key=lambda x: x[1], reverse=True))
+    dominant_tone = max(results, key=results.get)
+    # Scene/logo detection
+    scene_prompts = [
+        "a logo on the screen",
+        "a person holding a product",
+        "a group of people smiling",
+        "a close-up of a logo",
+        "a product on a table"
+    ]
+    scene_scores = get_clip_similarity(image, scene_prompts, clip_processor, clip_model)
+    # Color analysis
+    dominant_colors = get_dominant_color(image)
+    # Sharpness
+    sharpness = get_sharpness(image)
+    # Brightness/Contrast
+    brightness, contrast = get_brightness_contrast(image)
+    return {
+        "sorted_results": sorted_results,
+        "dominant_tone": dominant_tone,
+        "scene_scores": scene_scores,
+        "dominant_colors": dominant_colors,
+        "sharpness": sharpness,
+        "brightness": brightness,
+        "contrast": contrast,
+        "image": image
+    }
 
-screenshot_dir = "screenshots"
-image_files = sorted(glob.glob(f"{screenshot_dir}/*.png"))
+# =============================
+# Screenshot Extraction & Analysis
+# =============================
+if video_file is not None and st.button("Extract and Analyze Screenshots"):
+    if clean_up:
+        # Remove all screenshots
+        for file in glob.glob(f"{screenshot_folder}/screenshot_*.png"):
+            os.remove(file)
+        # Remove all video files in the main directory and screenshots folder
+        video_extensions = ["*.mp4", "*.mov", "*.avi", "*.mkv", "*.wmv", "*.mpeg", "*.mpg"]
+        for ext in video_extensions:
+            for file in glob.glob(ext):
+                os.remove(file)
+            for file in glob.glob(os.path.join(screenshot_folder, ext)):
+                os.remove(file)
+        st.success("Previous screenshots and uploaded video files removed.")
+    with st.spinner("Processing video..."):
+        try:
+            # Save the video file to the screenshot folder
+            video_path = os.path.join(screenshot_folder, video_file.name)
+            with open(video_path, "wb") as f:
+                f.write(video_file.read())
+            if not os.path.exists(video_path):
+                st.error(f"Video file not found at {video_path}")
+                st.stop()
+            st.write(f"Video path: {video_path}")
+            # Get video duration
+            duration_cmd = [
+                ffmpeg_path, 
+                '-i', video_path, 
+                '-f', 'null', 
+                '-'
+            ]
+            result = subprocess.run(duration_cmd, stderr=subprocess.PIPE, text=True)
+            duration_output = result.stderr
+            # Parse duration from ffmpeg output
+            duration = None
+            for line in duration_output.split('\n'):
+                if 'Duration' in line:
+                    time_str = line.split('Duration: ')[1].split(',')[0].strip()
+                    h, m, s = map(float, time_str.split(':'))
+                    duration = h * 3600 + m * 60 + s
+                    break
+            if duration:
+                st.info(f"Video duration: {duration:.2f} seconds")
+                # Calculate frame positions
+                total_frames = int(duration // interval)
+                frames_to_extract = min(total_frames, max_frames)
+                # Use ffmpeg to extract frames
+                command = [
+                    ffmpeg_path,
+                    '-i', video_path,
+                    '-vf', f'fps=1/{interval}',
+                    '-frames:v', str(frames_to_extract),
+                    '-q:v', '2',  # Higher quality
+                    f'{screenshot_folder}/screenshot_%04d.png'
+                ]
+                result = subprocess.run(command, capture_output=True, text=True)
+                if result.returncode != 0:
+                    st.error(f"ffmpeg error: {result.stderr}")
+                else:
+                    st.success(f"Extracted {frames_to_extract} screenshots!")
+                    # Load CLIP model for analysis
+                    with st.spinner("Loading CLIP model for analysis..."):
+                        processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+                        model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
+                        screenshots = sorted(glob.glob(f"{screenshot_folder}/screenshot_*.png"))
+                        if screenshots:
+                            st.header("Screenshot Analysis")
+                            all_descriptions = []
+                            for idx, img_path in enumerate(screenshots):
+                                col_img, col_analysis = st.columns([1, 1])
+                                with col_img:
+                                    img = Image.open(img_path)
+                                    st.image(img, caption=os.path.basename(img_path), use_container_width=True)
+                                with col_analysis:
+                                    st.subheader(f"Tone Analysis: {os.path.basename(img_path)}")
+                                    analysis = analyze_image(img_path, selected_tones, processor, model, clip_processor, clip_model)
+                                    # Display results
+                                    for tone, percentage in analysis["sorted_results"].items():
+                                        st.write(f"{tone}: {percentage}%")
+                                        st.progress(percentage/100)
+                                    st.info(f"✨ Dominant tone: **{analysis['dominant_tone']}**")
+                                    st.write("**Scene/Logo Detection:**")
+                                    for prompt, prob in analysis["scene_scores"].items():
+                                        st.write(f"{prompt}: {prob*100:.1f}%")
+                                    st.write("**Dominant Colors:**")
+                                    for idx2, color in enumerate(analysis["dominant_colors"], start=1):
+                                        st.color_picker(f"Dominant Color {idx2}", value='#%02x%02x%02x' % color, key=f"color{idx2}_{img_path}")
+                                    st.write(f"**Sharpness:** {analysis['sharpness']:.2f}")
+                                    st.write(f"**Brightness:** {analysis['brightness']:.2f}")
+                                    st.write(f"**Contrast:** {analysis['contrast']:.2f}")
+                                    # Generate storyboard description using GPT-4 Vision
+                                    try:
+                                        description = get_image_description_gpt4v(img_path)
+                                        all_descriptions.append((img_path, description))
+                                        st.success(f"Scene description generated.")
+                                        st.markdown(f"**Storyboard Description:**\n{description}")
+                                    except openai.error.OpenAIError as e:
+                                        st.error(f"Failed to generate storyboard description: {str(e)}")
+                                    except Exception as e:
+                                        st.error(f"Unexpected error during storyboard description: {str(e)}")
+                                    st.markdown("---")
+                            # Optionally, display all descriptions at the end
+                            st.header("All Storyboard Descriptions")
+                            for idx, (img_path, description) in enumerate(all_descriptions):
+                                st.image(img_path, caption=f"Scene {idx+1}", use_column_width=True)
+                                st.markdown(f"**Scene {idx+1} Description:**")
+                                st.info(description)
+                                st.markdown("---")
+                        else:
+                            st.warning("No screenshots were generated.")
+            else:
+                st.error("Could not determine video duration.")
+                st.code(duration_output)  # This will show the ffmpeg output in the Streamlit app
+        except Exception as e:
+            st.error(f"Error processing video: {str(e)}")
 
-if not image_files:
-    st.warning("No screenshots found. Please capture frames first.")
-else:
-    if st.button("Generate All Scene Descriptions"):
-        all_descriptions = []
-        # Load CLIP model and processor for batch analysis (use same as screenshot analysis)
-        processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
-        model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
-        with st.spinner("Generating storyboard descriptions for all scenes..."):
-            for idx, img_path in enumerate(image_files):
-                st.image(img_path, caption=f"Scene {idx+1}", use_column_width=True)
-                st.markdown(f"### Tone Analysis: {img_path.split('/')[-1]}")
-                image = Image.open(img_path)
-                inputs = processor(text=selected_tones, images=image, return_tensors="pt", padding=True)
-                outputs = model(**inputs)
-                logits_per_image = outputs.logits_per_image
-                probs = logits_per_image.softmax(dim=1)
-                results = {}
-                for tone, prob in zip(selected_tones, probs[0]):
-                    results[tone] = round(float(prob) * 100, 1)
-                sorted_results = dict(sorted(results.items(), key=lambda x: x[1], reverse=True))
-                for tone, percentage in sorted_results.items():
-                    st.write(f"{tone}: {percentage}%")
-                    st.progress(percentage/100)
-                dominant_tone = max(results, key=results.get)
-                st.markdown(f"✨ **Dominant tone:** {dominant_tone}")
-                # Storyboard description
-                description = get_image_description_gpt4v(img_path)
-                all_descriptions.append((img_path, description))
-                st.success(f"Scene {idx+1} description generated.")
-                st.markdown(f"**Storyboard Description:**\n{description}")
-                st.markdown("---")
-                time.sleep(1)  # To avoid hitting rate limits
-
-        st.header("All Storyboard Descriptions")
-        for idx, (img_path, description) in enumerate(all_descriptions):
-            st.image(img_path, caption=f"Scene {idx+1}", use_column_width=True)
-            st.markdown(f"**Scene {idx+1} Description:**")
-            st.info(description)
-            st.markdown("---")
+# Set your OpenAI API key (use st.secrets in production)
+openai.api_key = st.secrets["OPENAI_API_KEY"]
