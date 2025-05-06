@@ -212,8 +212,9 @@ if not selected_tones:
     selected_tones = default_descriptions[:3]  # Default to first 3 if none selected
 
 # Load CLIP model and processor once (at the top of your script)
-clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch16")
-clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch16")
+device = "cuda" if torch.cuda.is_available() else "cpu"
+clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(device)
+clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
 
 # =============================
 # Image Analysis Functions
@@ -413,8 +414,8 @@ if video_file is not None and st.button("Extract and Analyze Screenshots"):
                     st.success(f"Extracted {frames_to_extract} screenshots!")
                     # Load CLIP model for analysis
                     with st.spinner("Loading CLIP model for analysis..."):
-                        processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
-                        model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
+                        processor = clip_processor
+                        model = clip_model
                         screenshots = sorted(glob.glob(f"{screenshot_folder}/screenshot_*.png"))
                         if screenshots:
                             st.header("Screenshot Analysis")
