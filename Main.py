@@ -304,7 +304,7 @@ def get_image_description_gpt4v(image_path):
         "Describe this scene for a storyboard in about 100 words. "
         "Focus on the visual details, mood, and what a viewer should feel or notice."
     )
-    client = openai.OpenAI(api_key=openai.api_key)
+    client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
     response = client.chat.completions.create(
         model="gpt-4-vision-preview",
         messages=[

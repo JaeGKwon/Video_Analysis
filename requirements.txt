@@ -18,6 +18,6 @@ pydub==0.25.1
 plotly==5.19.0
 pandas==2.2.1
 ftfy==6.1.1
-regex==2024.2.10
+regex
 tqdm==4.66.2
 git+https://github.com/openai/CLIP.git
