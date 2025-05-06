@@ -233,7 +233,7 @@ def get_clip_similarity(image, prompts, processor, model):
     with torch.no_grad():
         outputs = model(**inputs)
         logits_per_image = outputs.logits_per_image
-        probs = logits_per_image.softmax(dim=1).cpu().numpy()[0]
+        probs = logits_per_image.softmax(dim=1).numpy()[0]
     return dict(zip(prompts, probs))
 
 def get_dominant_color(image, k=3):
@@ -317,10 +317,11 @@ def analyze_image(img_path, selected_tones, processor, model, clip_processor, cl
     image = Image.open(img_path)
     # Tone analysis with CLIP
     inputs = processor(text=selected_tones, images=image, return_tensors="pt", padding=True)
-    outputs = model(**inputs)
-    logits_per_image = outputs.logits_per_image
-    probs = logits_per_image.softmax(dim=1)
-    results = {tone: round(float(prob) * 100, 1) for tone, prob in zip(selected_tones, probs[0])}
+    with torch.no_grad():
+        outputs = model(**inputs)
+        logits_per_image = outputs.logits_per_image
+        probs = logits_per_image.softmax(dim=1).numpy()[0]
+    results = {tone: round(float(prob) * 100, 1) for tone, prob in zip(selected_tones, probs)}
     sorted_results = dict(sorted(results.items(), key=lambda x: x[1], reverse=True))
     dominant_tone = max(results, key=results.get)
     # Scene/logo detection
