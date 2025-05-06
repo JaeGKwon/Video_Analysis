@@ -59,82 +59,12 @@ if missing_packages:
         st.code(f"pip install {' '.join(missing_packages)}")
     st.stop()
 
-# Find ffmpeg - try multiple approaches
-ffmpeg_path = None
-
-# Check common installation paths based on OS
-common_paths = []
-if platform.system() == "Darwin":  # macOS
-    common_paths = [
-        "/opt/homebrew/bin/ffmpeg",
-        "/usr/local/bin/ffmpeg",
-        "/opt/local/bin/ffmpeg"
-    ]
-elif platform.system() == "Windows":
-    common_paths = [
-        r"C:\Program Files\ffmpeg\bin\ffmpeg.exe",
-        r"C:\ffmpeg\bin\ffmpeg.exe"
-    ]
-else:  # Linux and others
-    common_paths = [
-        "/usr/bin/ffmpeg",
-        "/usr/local/bin/ffmpeg"
-    ]
-
-# First check if ffmpeg is in PATH
-if command_exists("ffmpeg"):
-    ffmpeg_path = "ffmpeg"  # Use the command name directly
-else:
-    # Try common paths
-    for path in common_paths:
-        if os.path.exists(path):
-            ffmpeg_path = path
-            break
-
-# If not found, allow user to specify path
+# Simplified ffmpeg detection
+ffmpeg_path = shutil.which("ffmpeg")
 if not ffmpeg_path:
-    st.warning("⚠️ ffmpeg not found in common locations. Please specify the path to ffmpeg.")
-    user_path = st.text_input("Path to ffmpeg executable:")
-    if user_path and os.path.exists(user_path):
-        ffmpeg_path = user_path
-
-# Final check
-if not ffmpeg_path:
-    st.error("❌ ffmpeg is required but could not be found. Please install ffmpeg or specify its path.")
-    with st.expander("Installation instructions"):
-        st.markdown("""
-        ### Installing ffmpeg:
-        
-        **macOS:** 
-        ```
-        brew install ffmpeg
-        ```
-        
-        **Ubuntu/Debian:**
-        ```
-        sudo apt update
-        sudo apt install ffmpeg
-        ```
-        
-        **Windows:**
-        1. Download from [ffmpeg.org](https://ffmpeg.org/download.html)
-        2. Extract to a folder
-        3. Add the bin folder to your PATH or specify the full path above
-        """)
+    st.error("❌ ffmpeg is required but could not be found. Please install ffmpeg.")
     st.stop()
-
-if ffmpeg_path:
-    os.environ["FFMPEG_BINARY"] = ffmpeg_path
-    try:
-        import imageio
-        imageio.plugins.ffmpeg.FFMPEG_EXE = ffmpeg_path
-    except Exception:
-        pass
-    try:
-        import moviepy.config as mpy_config
-        mpy_config.change_settings({"FFMPEG_BINARY": ffmpeg_path})
-    except Exception:
-        pass
+os.environ["FFMPEG_BINARY"] = ffmpeg_path
 
 # Create screenshot folder
 screenshot_folder = "./screenshots"
