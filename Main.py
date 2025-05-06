@@ -13,11 +13,11 @@ import moviepy.config as mpy_config
 import numpy as np
 from PIL import Image
 from sklearn.cluster import KMeans
-from transformers import CLIPProcessor, CLIPModel
 import torch
 import openai
 import base64
 import time
+import clip
 
 # =============================
 # Environment and Dependency Checks
@@ -212,8 +212,8 @@ if not selected_tones:
     selected_tones = default_descriptions[:3]  # Default to first 3 if none selected
 
 # Load CLIP model and processor once (at the top of your script)
-clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
-clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+device = "cuda" if torch.cuda.is_available() else "cpu"
+model, preprocess = clip.load("ViT-B/32", device=device)
 
 # =============================
 # Image Analysis Functions
@@ -229,11 +229,21 @@ def get_clip_similarity(image, prompts, processor, model):
     Returns:
         dict: Mapping from prompt to similarity probability.
     """
-    inputs = processor(text=prompts, images=image, return_tensors="pt", padding=True)
+    image_input = preprocess(image).unsqueeze(0).to(device)
+    text_inputs = clip.tokenize(prompts).to(device)
+    
     with torch.no_grad():
-        outputs = model(**inputs)
-        logits_per_image = outputs.logits_per_image
-        probs = logits_per_image.softmax(dim=1).numpy()[0]
+        image_features = model.encode_image(image_input)
+        text_features = model.encode_text(text_inputs)
+        
+        # Normalize features
+        image_features /= image_features.norm(dim=-1, keepdim=True)
+        text_features /= text_features.norm(dim=-1, keepdim=True)
+        
+        # Calculate similarity
+        similarity = (100.0 * image_features @ text_features.T).softmax(dim=-1)
+        probs = similarity.cpu().numpy()[0]
+    
     return dict(zip(prompts, probs))
 
 def get_dominant_color(image, k=3):
@@ -316,14 +326,25 @@ def analyze_image(img_path, selected_tones, processor, model, clip_processor, cl
     """
     image = Image.open(img_path)
     # Tone analysis with CLIP
-    inputs = processor(text=selected_tones, images=image, return_tensors="pt", padding=True)
+    image_input = preprocess(image).unsqueeze(0).to(device)
+    text_inputs = clip.tokenize(selected_tones).to(device)
+    
     with torch.no_grad():
-        outputs = model(**inputs)
-        logits_per_image = outputs.logits_per_image
-        probs = logits_per_image.softmax(dim=1).numpy()[0]
+        image_features = model.encode_image(image_input)
+        text_features = model.encode_text(text_inputs)
+        
+        # Normalize features
+        image_features /= image_features.norm(dim=-1, keepdim=True)
+        text_features /= text_features.norm(dim=-1, keepdim=True)
+        
+        # Calculate similarity
+        similarity = (100.0 * image_features @ text_features.T).softmax(dim=-1)
+        probs = similarity.cpu().numpy()[0]
+    
     results = {tone: round(float(prob) * 100, 1) for tone, prob in zip(selected_tones, probs)}
     sorted_results = dict(sorted(results.items(), key=lambda x: x[1], reverse=True))
     dominant_tone = max(results, key=results.get)
+    
     # Scene/logo detection
     scene_prompts = [
         "a logo on the screen",
@@ -332,7 +353,8 @@ def analyze_image(img_path, selected_tones, processor, model, clip_processor, cl
         "a close-up of a logo",
         "a product on a table"
     ]
-    scene_scores = get_clip_similarity(image, scene_prompts, clip_processor, clip_model)
+    scene_scores = get_clip_similarity(image, scene_prompts, preprocess, model)
+    
     # Color analysis
     dominant_colors = get_dominant_color(image)
     # Sharpness
@@ -414,8 +436,7 @@ if video_file is not None and st.button("Extract and Analyze Screenshots"):
                     st.success(f"Extracted {frames_to_extract} screenshots!")
                     # Load CLIP model for analysis
                     with st.spinner("Loading CLIP model for analysis..."):
-                        processor = clip_processor
-                        model = clip_model
+                        processor = preprocess
                         screenshots = sorted(glob.glob(f"{screenshot_folder}/screenshot_*.png"))
                         if screenshots:
                             st.header("Screenshot Analysis")
@@ -427,7 +448,7 @@ if video_file is not None and st.button("Extract and Analyze Screenshots"):
                                     st.image(img, caption=os.path.basename(img_path), use_container_width=True)
                                 with col_analysis:
                                     st.subheader(f"Tone Analysis: {os.path.basename(img_path)}")
-                                    analysis = analyze_image(img_path, selected_tones, processor, model, clip_processor, clip_model)
+                                    analysis = analyze_image(img_path, selected_tones, processor, model, preprocess, model)
                                     # Display results
                                     for tone, percentage in analysis["sorted_results"].items():
                                         st.write(f"{tone}: {percentage}%")
