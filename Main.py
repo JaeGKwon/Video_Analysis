@@ -447,10 +447,8 @@ if video_file is not None and st.button("Extract and Analyze Screenshots"):
                                         all_descriptions.append((img_path, description))
                                         st.success(f"Scene description generated.")
                                         st.markdown(f"**Storyboard Description:**\n{description}")
-                                    except openai.error.OpenAIError as e:
-                                        st.error(f"Failed to generate storyboard description: {str(e)}")
                                     except Exception as e:
-                                        st.error(f"Unexpected error during storyboard description: {str(e)}")
+                                        st.error(f"Failed to generate storyboard description: {str(e)}")
                                     st.markdown("---")
                             # Optionally, display all descriptions at the end
                             st.header("All Storyboard Descriptions")
