@@ -212,8 +212,7 @@ if not selected_tones:
     selected_tones = default_descriptions[:3]  # Default to first 3 if none selected
 
 # Load CLIP model and processor once (at the top of your script)
-device = "cuda" if torch.cuda.is_available() else "cpu"
-clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(device)
+clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32", device_map="auto")
 clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
 
 # =============================
