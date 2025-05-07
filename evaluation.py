@@ -1,5 +1,8 @@
 import json
 import streamlit as st
+import openai
+import base64
+import os
 
 # Mapping for score to stars
 STAR = {
@@ -42,7 +45,6 @@ def extract_score_and_note(answer):
     return score, note
 
 def render_scorecard(final_output):
-    # Define the dimensions to look for
     dimensions = [
         "Tone & Messaging",
         "Emotional Narrative",
@@ -51,8 +53,6 @@ def render_scorecard(final_output):
         "Target Market Fit",
         "Competitive Differentiation"
     ]
-    # Try to map LLM Q&A keys to these dimensions
-    # (You may want to customize this mapping based on your LLM output)
     mapping = {
         "Tone & Messaging": ["tone", "messaging", "Tone", "Messaging"],
         "Emotional Narrative": ["emotional", "narrative", "storytelling"],
@@ -61,20 +61,18 @@ def render_scorecard(final_output):
         "Target Market Fit": ["target", "market", "fit", "homeowners", "millennials"],
         "Competitive Differentiation": ["competitive", "differentiation", "price-first", "brands"]
     }
-    # Aggregate answers from all screenshots (could average or take the best)
     summary = {dim: {"score": 0, "note": ""} for dim in dimensions}
     for entry in final_output:
-        llm_qa = entry.get("llm_qa", {})
+        # Use persona-driven answers if available
+        llm_qa = entry.get("llm_qa_persona") or entry.get("llm_qa", {})
         if isinstance(llm_qa, dict):
             for dim in dimensions:
                 for key in llm_qa:
                     if any(k.lower() in key.lower() for k in mapping[dim]):
                         score, note = extract_score_and_note(llm_qa[key])
-                        # Take the highest score/note found for each dimension
                         if score > summary[dim]["score"]:
                             summary[dim]["score"] = score
                             summary[dim]["note"] = note
-    # Render the scorecard as a markdown table
     md = "| Dimension | Score | Notes |\n|---|---|---|\n"
     for dim in dimensions:
         stars = STAR.get(summary[dim]["score"], STAR[0])
@@ -208,11 +206,70 @@ profile = {
 
 evaluate = st.button("Evaluate")
 
+# Set your OpenAI API key (assume it's in Streamlit secrets)
+openai.api_key = st.secrets["OPENAI_API_KEY"]
+
+def get_llm_qa_persona(image_path, questions_path, persona_profile):
+    """
+    Use GPT-4o to answer a set of questions about an image, from the perspective of the given persona.
+    """
+    with open(image_path, "rb") as img_file:
+        img_bytes = img_file.read()
+        img_b64 = base64.b64encode(img_bytes).decode("utf-8")
+    with open(questions_path, "r") as f:
+        questions = f.read().strip()
+    persona_context = (
+        f"You are evaluating this as a persona with the following profile: {json.dumps(persona_profile)}. "
+        "Answer the following questions from this perspective."
+    )
+    instruction = (
+        "You are a chief creative officer. Evaluate the uploaded screenshot as if it is a frame from a streaming ad. "
+        "For each of the following categories, provide a short, specific answer. If possible, include a numeric score from 1-10 (10 = best) for each category. "
+        "Return your answers as a JSON object where each key is the category and each value is your answer."
+    )
+    prompt = persona_context + "\n\n" + instruction + "\n\n" + questions
+    response = openai.ChatCompletion.create(
+        model="gpt-4o",
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img_b64}"}}
+                ]
+            }
+        ],
+        max_tokens=1500
+    )
+    answer_text = response.choices[0].message.content
+    try:
+        start = answer_text.find('{')
+        end = answer_text.rfind('}') + 1
+        parsed = json.loads(answer_text[start:end])
+        return parsed
+    except Exception:
+        return answer_text
+
 if uploaded and evaluate:
     st.markdown("#### Selected Evaluator Profile:")
     st.json(profile)
     data = json.load(uploaded)
-    render_scorecard(data)
+    # For each screenshot, re-run LLM Q&A with persona context
+    persona_results = []
+    for entry in data:
+        img_path = entry["screenshot"]["file"]
+        # Assume screenshots are in the same directory as Main.py output
+        img_path_full = img_path if os.path.exists(img_path) else os.path.join("screenshots", img_path)
+        # Use questions.txt from the project root
+        questions_path = "questions.txt"
+        try:
+            llm_qa_persona = get_llm_qa_persona(img_path_full, questions_path, profile)
+        except Exception as e:
+            llm_qa_persona = {"error": str(e)}
+        persona_entry = dict(entry)
+        persona_entry["llm_qa_persona"] = llm_qa_persona
+        persona_results.append(persona_entry)
+    render_scorecard(persona_results)
 elif uploaded and not evaluate:
     st.info("Click 'Evaluate' to generate the scorecard.")
 else:
