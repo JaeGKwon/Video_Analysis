@@ -254,14 +254,15 @@ if uploaded and evaluate:
     st.markdown("#### Selected Evaluator Profile:")
     st.json(profile)
     data = json.load(uploaded)
-    # For each screenshot, re-run LLM Q&A with persona context
+    st.info("Running persona-driven evaluation. This may take a while depending on the number of screenshots...")
     persona_results = []
-    for entry in data:
+    progress = st.progress(0)
+    status = st.empty()
+    for idx, entry in enumerate(data):
         img_path = entry["screenshot"]["file"]
-        # Assume screenshots are in the same directory as Main.py output
         img_path_full = img_path if os.path.exists(img_path) else os.path.join("screenshots", img_path)
-        # Use questions.txt from the project root
         questions_path = "questions.txt"
+        status.text(f"Evaluating screenshot {idx+1} of {len(data)}...")
         try:
             llm_qa_persona = get_llm_qa_persona(img_path_full, questions_path, profile)
         except Exception as e:
@@ -269,6 +270,8 @@ if uploaded and evaluate:
         persona_entry = dict(entry)
         persona_entry["llm_qa_persona"] = llm_qa_persona
         persona_results.append(persona_entry)
+        progress.progress((idx+1)/len(data))
+    status.success("Evaluation complete!")
     render_scorecard(persona_results)
 elif uploaded and not evaluate:
     st.info("Click 'Evaluate' to generate the scorecard.")
