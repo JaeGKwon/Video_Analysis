@@ -258,20 +258,64 @@ if uploaded and evaluate:
     persona_results = []
     progress = st.progress(0)
     status = st.empty()
+    logs = []
     for idx, entry in enumerate(data):
         img_path = entry["screenshot"]["file"]
         img_path_full = img_path if os.path.exists(img_path) else os.path.join("screenshots", img_path)
         questions_path = "questions.txt"
         status.text(f"Evaluating screenshot {idx+1} of {len(data)}...")
+        logs.append(f"[START] Screenshot {idx+1}/{len(data)}: {img_path_full}")
         try:
-            llm_qa_persona = get_llm_qa_persona(img_path_full, questions_path, profile)
+            # Log the prompt
+            with open(img_path_full, "rb") as img_file:
+                img_bytes = img_file.read()
+                img_b64 = base64.b64encode(img_bytes).decode("utf-8")
+            with open(questions_path, "r") as f:
+                questions = f.read().strip()
+            persona_context = (
+                f"You are evaluating this as a persona with the following profile: {json.dumps(profile)}. "
+                "Answer the following questions from this perspective."
+            )
+            instruction = (
+                "You are a chief creative officer. Evaluate the uploaded screenshot as if it is a frame from a streaming ad. "
+                "For each of the following categories, provide a short, specific answer. If possible, include a numeric score from 1-10 (10 = best) for each category. "
+                "Return your answers as a JSON object where each key is the category and each value is your answer."
+            )
+            prompt = persona_context + "\n\n" + instruction + "\n\n" + questions
+            logs.append(f"[PROMPT] Screenshot {idx+1}: {prompt[:500]}... (truncated)")
+            response = openai.ChatCompletion.create(
+                model="gpt-4o",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img_b64}"}}
+                        ]
+                    }
+                ],
+                max_tokens=1500
+            )
+            answer_text = response.choices[0].message.content
+            try:
+                start = answer_text.find('{')
+                end = answer_text.rfind('}') + 1
+                parsed = json.loads(answer_text[start:end])
+                llm_qa_persona = parsed
+            except Exception:
+                llm_qa_persona = answer_text
+            logs.append(f"[SUCCESS] Screenshot {idx+1}: LLM response received.")
         except Exception as e:
             llm_qa_persona = {"error": str(e)}
+            logs.append(f"[ERROR] Screenshot {idx+1}: {str(e)}")
         persona_entry = dict(entry)
         persona_entry["llm_qa_persona"] = llm_qa_persona
         persona_results.append(persona_entry)
         progress.progress((idx+1)/len(data))
     status.success("Evaluation complete!")
+    with st.expander("Show Evaluation Log"):
+        for log in logs:
+            st.write(log)
     render_scorecard(persona_results)
 elif uploaded and not evaluate:
     st.info("Click 'Evaluate' to generate the scorecard.")
