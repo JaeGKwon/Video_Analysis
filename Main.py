@@ -98,8 +98,8 @@ max_frames = st.number_input("Maximum frames to extract", min_value=1, max_value
 #   - Uses GPT-4 Vision to answer these questions for the given image, returning answers as a JSON object if possible.
 #   - Designed for flexible, multi-category evaluation (e.g., cinematography, lighting, storytelling, etc.).
 
-# Set up OpenAI client using the new SDK pattern
-client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+# Set up OpenAI client using the new SDK pattern (no api_key argument for Streamlit Cloud)
+client = openai.OpenAI()
 
 def get_image_description_gpt4v(image_path):
     """
