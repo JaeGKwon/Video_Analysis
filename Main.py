@@ -34,6 +34,8 @@ from sklearn.cluster import KMeans
 import cv2
 from skimage import measure
 import json
+import zipfile
+import io
 
 # =============================
 # Streamlit UI: Video Upload & Settings
@@ -366,6 +368,18 @@ if video_file is not None and st.button("Extract and Analyze Screenshots"):
                             data=json.dumps(final_output, indent=2),
                             file_name="final_output.json",
                             mime="application/json"
+                        )
+                        # Add download button for zipped screenshots
+                        zip_buffer = io.BytesIO()
+                        with zipfile.ZipFile(zip_buffer, "w") as zipf:
+                            for img_path in screenshots:
+                                zipf.write(img_path, arcname=os.path.basename(img_path))
+                        zip_buffer.seek(0)
+                        st.download_button(
+                            label="Download All Screenshots as ZIP",
+                            data=zip_buffer,
+                            file_name="screenshots.zip",
+                            mime="application/zip"
                         )
                     else:
                         st.warning("No screenshots were generated.")
