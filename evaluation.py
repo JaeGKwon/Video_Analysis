@@ -159,24 +159,21 @@ st.title("Evaluation Scorecard Generator")
 uploaded = st.file_uploader("Upload final_output.json", type=["json"])
 
 st.markdown("### Evaluator Profile")
+# Experian Mosaic Persona selection first
+mosaic_persona = st.selectbox("Experian Mosaic Persona", [
+    "",
+    "Power Elite",
+    "Flourishing Families",
+    "Suburban Style",
+    "Career & Family",
+    "Rural Heritage",
+    "Urban Ambition",
+    "Other"
+])
+st.markdown("---")
 col1, col2 = st.columns(2)
-
-# Persona selection first
-with col2:
-    mosaic_persona = st.selectbox("Experian Mosaic Persona", [
-        "",
-        "Power Elite",
-        "Flourishing Families",
-        "Suburban Style",
-        "Career & Family",
-        "Rural Heritage",
-        "Urban Ambition",
-        "Other"
-    ])
-
 # Set defaults based on persona
 defaults = MOSAIC_PROFILES.get(mosaic_persona, {})
-
 with col1:
     state = st.selectbox("Location (State)", ["", "CA", "NY", "TX", "FL", "IL", "Other"],
         index=["", "CA", "NY", "TX", "FL", "IL", "Other"].index(defaults.get("State", "")) if defaults.get("State") in ["CA", "NY", "TX", "FL", "IL", "Other"] else 0)
@@ -209,10 +206,14 @@ profile = {
     "Experian Mosaic Persona": mosaic_persona
 }
 
-if uploaded:
+evaluate = st.button("Evaluate")
+
+if uploaded and evaluate:
     st.markdown("#### Selected Evaluator Profile:")
     st.json(profile)
     data = json.load(uploaded)
     render_scorecard(data)
+elif uploaded and not evaluate:
+    st.info("Click 'Evaluate' to generate the scorecard.")
 else:
     st.info("Please upload a final_output.json file generated from Main.py.") 
