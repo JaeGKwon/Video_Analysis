@@ -1,3 +1,23 @@
+# =============================================
+# Video Screenshot & Tone Analyzer (Main.py)
+#
+# GOAL:
+# This Streamlit app allows users to upload a video, extract key frames (screenshots), and analyze each frame using both traditional image metrics and advanced AI (LLM) techniques. The app provides:
+#   1. Basic image metrics (brightness, contrast, sharpness, etc.)
+#   2. A creative, LLM-generated storyboard description for each frame
+#   3. LLM-based Q&A: For each frame, answers to a set of custom questions (from questions.txt) using GPT-4 Vision
+#
+# The app is designed for creative, marketing, and quality control teams to quickly assess the visual and narrative qualities of video content.
+# =============================================
+#
+# MAIN FUNCTIONS:
+# - get_image_metrics: Computes basic image statistics for a given image.
+# - get_image_description_gpt4v: Uses GPT-4 Vision to generate a creative description of the image.
+# - get_llm_qa: Uses GPT-4 Vision to answer a set of custom questions about the image (from questions.txt).
+#
+# The UI guides the user through uploading a video, extracting frames, and viewing all analyses for each frame.
+# =============================================
+
 # =============================
 # Imports and Global Setup
 # =============================
@@ -5,77 +25,30 @@ import streamlit as st
 import subprocess
 import os
 import glob
-import platform
-from pathlib import Path
 import shutil
-import imageio
-import moviepy.config as mpy_config
 import numpy as np
 from PIL import Image
 import openai
 import base64
-
-# =============================
-# Environment and Dependency Checks
-# =============================
-# Set the full path to ffmpeg for all subprocesses
-# os.environ["PATH"] = "/opt/homebrew/bin:" + os.environ.get("PATH", "")
-# os.environ["FFMPEG_BINARY"] = "/opt/homebrew/bin/ffmpeg"
-
-# imageio.plugins.ffmpeg.FFMPEG_EXE = "/opt/homebrew/bin/ffmpeg"
-
-# import moviepy.config as mpy_config
-# mpy_config.change_settings({"FFMPEG_BINARY": "/opt/homebrew/bin/ffmpeg"})
-
-st.set_page_config(page_title="Video Screenshot & Tone Analyzer", layout="centered")
-st.title("🎬 Video Screenshot & Tone Analyzer")
+from sklearn.cluster import KMeans
+import cv2
+from skimage import measure
+import json
 
 # =============================
 # Streamlit UI: Video Upload & Settings
 # =============================
-# Function to check if a command exists in the system PATH
-def command_exists(command):
-    """
-    Check if a command exists in the system PATH.
-    Args:
-        command (str): The command to check.
-    Returns:
-        bool: True if the command exists, False otherwise.
-    """
-    return shutil.which(command) is not None
-
-# Check for required Python packages
-missing_packages = []
-try:
-    from PIL import Image
-except ModuleNotFoundError:
-    missing_packages.append("Pillow")
-
-if missing_packages:
-    with st.error("❌ Missing required libraries:"):
-        for package in missing_packages:
-            st.write(f"- {package}")
-        st.write("Please install missing packages with:")
-        st.code(f"pip install {' '.join(missing_packages)}")
-    st.stop()
 
 # Simplified ffmpeg detection
 ffmpeg_path = shutil.which("ffmpeg")
 if not ffmpeg_path:
-    st.error("❌ ffmpeg is required but could not be found. Please install ffmpeg.")
+    st.error("ffmpeg is required but could not be found. Please install ffmpeg.")
     st.stop()
 os.environ["FFMPEG_BINARY"] = ffmpeg_path
 
 # Create screenshot folder
 screenshot_folder = "./screenshots"
 os.makedirs(screenshot_folder, exist_ok=True)
-
-# Clean up old screenshots option
-##if glob.glob(f"{screenshot_folder}/screenshot_*.png"):
-#    if st.checkbox("Clean up previous screenshots"):
-#       for file in glob.glob(f"{screenshot_folder}/screenshot_*.png"):
-#             os.remove(file)
-#        st.success("Previous screenshots removed")
 
 # Main content area (single column)
 st.markdown("### Video Player")
@@ -107,33 +80,24 @@ clean_up = st.checkbox("Clean up previous screenshots", value=True)
 st.subheader("Extraction Settings")
 interval = st.number_input("Frame extraction interval (seconds)", min_value=1, max_value=300, value=10)
 max_frames = st.number_input("Maximum frames to extract", min_value=1, max_value=50, value=10)
-st.subheader("Analysis Settings")
-custom_tone = st.text_input("Add custom tone descriptor:", placeholder="e.g., 'elegant and refined'")
-
-default_descriptions = [
-    "bright and cheerful",
-    "dark and moody",
-    "professional and corporate",
-    "casual and playful",
-    "serious and formal"
-]
-
-if custom_tone:
-    if custom_tone not in default_descriptions:
-        default_descriptions.append(custom_tone)
-
-selected_tones = st.multiselect(
-    "Tone categories to analyze:",
-    options=default_descriptions,
-    default=default_descriptions[:3]
-)
-
-if not selected_tones:
-    selected_tones = default_descriptions[:3]  # Default to first 3 if none selected
 
 # =============================
 # Image Analysis Functions
 # =============================
+#
+# get_image_description_gpt4v:
+#   - Uses GPT-4 Vision to generate a creative, storyboard-style description of the image.
+#   - Focuses on visual details, mood, and what a viewer should feel or notice.
+#
+# get_image_metrics:
+#   - Computes basic image statistics: brightness, contrast, sharpness, dominant colors, saturation, edge density, entropy, colorfulness, aspect ratio, resolution, and histogram.
+#   - Useful for objective, quantitative analysis of each frame.
+#
+# get_llm_qa:
+#   - Reads a set of custom questions from questions.txt.
+#   - Uses GPT-4 Vision to answer these questions for the given image, returning answers as a JSON object if possible.
+#   - Designed for flexible, multi-category evaluation (e.g., cinematography, lighting, storytelling, etc.).
+
 def get_image_description_gpt4v(image_path):
     """
     Generate a creative storyboard description for an image using GPT-4 Vision.
@@ -166,33 +130,129 @@ def get_image_description_gpt4v(image_path):
     )
     return response.choices[0].message.content
 
-def analyze_image(img_path, selected_tones=None, processor=None, model=None, clip_processor=None, clip_model=None):
-    """
-    Perform all analyses on a single image using GPT-4 Vision and return results as a dict.
-    """
-    image = Image.open(img_path)
-    # Use GPT-4 Vision for scene/tone description
-    description = get_image_description_gpt4v(img_path)
-    # Optionally, add basic color/brightness/sharpness using PIL/numpy
-    arr = np.array(image.convert('L'))
-    brightness = float(np.mean(arr))
-    contrast = float(np.std(arr))
+def get_image_metrics(image_path):
+    image = Image.open(image_path).convert("RGB")
+    arr = np.array(image)
+    gray = image.convert("L")
+    arr_gray = np.array(gray)
+
+    # Brightness and contrast
+    brightness = float(np.mean(arr_gray))
+    contrast = float(np.std(arr_gray))
+
+    # Sharpness (variance of Laplacian)
+    sharpness = float(np.var(np.gradient(arr_gray)))
+
+    # Dominant colors (k-means, 3 clusters)
+    arr_reshape = arr.reshape((-1, 3))
+    kmeans = KMeans(n_clusters=3, n_init=10)
+    kmeans.fit(arr_reshape)
+    dominant_colors = [tuple(map(int, c)) for c in kmeans.cluster_centers_]
+
+    # Saturation (mean of S channel in HSV)
+    hsv = image.convert("HSV")
+    s = np.array(hsv)[:, :, 1]
+    saturation = float(np.mean(s))
+
+    # Edge density (Canny)
+    arr_gray_uint8 = arr_gray.astype(np.uint8)
+    edges = cv2.Canny(arr_gray_uint8, 100, 200)
+    edge_density = float(np.mean(edges > 0))
+
+    # Entropy
+    entropy = measure.shannon_entropy(arr_gray)
+
+    # Colorfulness (Hasler & Süsstrunk)
+    (B, G, R) = cv2.split(arr)
+    rg = np.absolute(R - G)
+    yb = np.absolute(0.5 * (R + G) - B)
+    std_rg, std_yb = np.std(rg), np.std(yb)
+    mean_rg, mean_yb = np.mean(rg), np.mean(yb)
+    colorfulness = np.sqrt(std_rg ** 2 + std_yb ** 2) + (0.3 * np.sqrt(mean_rg ** 2 + mean_yb ** 2))
+
+    # Aspect ratio and resolution
+    width, height = image.size
+    aspect_ratio = width / height
+    resolution = {"width": width, "height": height}
+
+    # Histogram features
+    hist = np.histogram(arr_gray, bins=256, range=(0, 255))[0].tolist()
+
     return {
-        "description": description,
         "brightness": brightness,
         "contrast": contrast,
-        "image": image
+        "sharpness": sharpness,
+        "dominant_colors": dominant_colors,
+        "saturation": saturation,
+        "edge_density": edge_density,
+        "entropy": entropy,
+        "colorfulness": colorfulness,
+        "aspect_ratio": aspect_ratio,
+        "resolution": resolution,
+        "histogram": hist
     }
+
+def get_llm_qa(image_path, questions_path="questions.txt"):
+    """
+    Use GPT-4 Vision to answer a set of questions about an image.
+    Args:
+        image_path (str): Path to the image file.
+        questions_path (str): Path to the questions.txt file.
+    Returns:
+        dict or str: Dictionary of answers or raw string if not JSON.
+    """
+    with open(image_path, "rb") as img_file:
+        img_bytes = img_file.read()
+        img_b64 = base64.b64encode(img_bytes).decode("utf-8")
+    with open(questions_path, "r") as f:
+        questions = f.read().strip()
+    instruction = (
+        "You are a chief creative officer. Evaluate the uploaded screenshot as if it is a frame from a streaming ad. "
+        "For each of the following categories, provide a short, specific answer. If possible, include a numeric score from 1-10 (10 = best) for each category. "
+        "Return your answers as a JSON object where each key is the category and each value is your answer."
+    )
+    prompt = instruction + "\n\n" + questions
+    client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+    response = client.chat.completions.create(
+        model="gpt-4-vision-preview",
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img_b64}"}}
+                ]
+            }
+        ],
+        max_tokens=1500
+    )
+    answer_text = response.choices[0].message.content
+    # Try to parse the output as JSON
+    try:
+        start = answer_text.find('{')
+        end = answer_text.rfind('}') + 1
+        parsed = json.loads(answer_text[start:end])
+        return parsed
+    except Exception:
+        return answer_text
 
 # =============================
 # Screenshot Extraction & Analysis
 # =============================
+#
+# This section handles:
+#   - Extracting frames from the uploaded video using ffmpeg
+#   - Cleaning up old screenshots and video files if requested
+#   - For each extracted frame:
+#       - Displaying the image
+#       - Showing basic metrics
+#       - Showing a creative description (LLM)
+#       - Running LLM-based Q&A and displaying the results
+#
 if video_file is not None and st.button("Extract and Analyze Screenshots"):
     if clean_up:
-        # Remove all screenshots
         for file in glob.glob(f"{screenshot_folder}/screenshot_*.png"):
             os.remove(file)
-        # Remove all video files in the main directory and screenshots folder
         video_extensions = ["*.mp4", "*.mov", "*.avi", "*.mkv", "*.wmv", "*.mpeg", "*.mpg"]
         for ext in video_extensions:
             for file in glob.glob(ext):
@@ -202,7 +262,6 @@ if video_file is not None and st.button("Extract and Analyze Screenshots"):
         st.success("Previous screenshots and uploaded video files removed.")
     with st.spinner("Processing video..."):
         try:
-            # Save the video file to the screenshot folder
             video_path = os.path.join(screenshot_folder, video_file.name)
             with open(video_path, "wb") as f:
                 f.write(video_file.read())
@@ -210,7 +269,6 @@ if video_file is not None and st.button("Extract and Analyze Screenshots"):
                 st.error(f"Video file not found at {video_path}")
                 st.stop()
             st.write(f"Video path: {video_path}")
-            # Get video duration
             duration_cmd = [
                 ffmpeg_path, 
                 '-i', video_path, 
@@ -219,7 +277,6 @@ if video_file is not None and st.button("Extract and Analyze Screenshots"):
             ]
             result = subprocess.run(duration_cmd, stderr=subprocess.PIPE, text=True)
             duration_output = result.stderr
-            # Parse duration from ffmpeg output
             duration = None
             for line in duration_output.split('\n'):
                 if 'Duration' in line:
@@ -229,16 +286,14 @@ if video_file is not None and st.button("Extract and Analyze Screenshots"):
                     break
             if duration:
                 st.info(f"Video duration: {duration:.2f} seconds")
-                # Calculate frame positions
                 total_frames = int(duration // interval)
                 frames_to_extract = min(total_frames, max_frames)
-                # Use ffmpeg to extract frames
                 command = [
                     ffmpeg_path,
                     '-i', video_path,
                     '-vf', f'fps=1/{interval}',
                     '-frames:v', str(frames_to_extract),
-                    '-q:v', '2',  # Higher quality
+                    '-q:v', '2',
                     f'{screenshot_folder}/screenshot_%04d.png'
                 ]
                 result = subprocess.run(command, capture_output=True, text=True)
@@ -246,46 +301,54 @@ if video_file is not None and st.button("Extract and Analyze Screenshots"):
                     st.error(f"ffmpeg error: {result.stderr}")
                 else:
                     st.success(f"Extracted {frames_to_extract} screenshots!")
-                    # Load CLIP model for analysis
-                    with st.spinner("Loading CLIP model for analysis..."):
-                        processor = None
-                        screenshots = sorted(glob.glob(f"{screenshot_folder}/screenshot_*.png"))
-                        if screenshots:
-                            st.header("Screenshot Analysis")
-                            all_descriptions = []
-                            for idx, img_path in enumerate(screenshots):
-                                col_img, col_analysis = st.columns([1, 1])
-                                with col_img:
-                                    img = Image.open(img_path)
-                                    st.image(img, caption=os.path.basename(img_path), use_container_width=True)
-                                with col_analysis:
-                                    st.subheader(f"Tone Analysis: {os.path.basename(img_path)}")
-                                    analysis = analyze_image(img_path, selected_tones, processor, None, None, None)
-                                    # Display results
-                                    st.info(f"✨ Scene description: **{analysis['description']}**")
-                                    st.write(f"**Brightness:** {analysis['brightness']:.2f}")
-                                    st.write(f"**Contrast:** {analysis['contrast']:.2f}")
-                                    # Generate storyboard description using GPT-4 Vision
-                                    try:
-                                        description = get_image_description_gpt4v(img_path)
-                                        all_descriptions.append((img_path, description))
-                                        st.success(f"Scene description generated.")
-                                        st.markdown(f"**Storyboard Description:**\n{description}")
-                                    except Exception as e:
-                                        st.error(f"Failed to generate storyboard description: {str(e)}")
-                                    st.markdown("---")
-                            # Optionally, display all descriptions at the end
-                            st.header("All Storyboard Descriptions")
-                            for idx, (img_path, description) in enumerate(all_descriptions):
-                                st.image(img_path, caption=f"Scene {idx+1}", use_column_width=True)
-                                st.markdown(f"**Scene {idx+1} Description:**")
-                                st.info(description)
-                                st.markdown("---")
-                        else:
-                            st.warning("No screenshots were generated.")
+                    screenshots = sorted(glob.glob(f"{screenshot_folder}/screenshot_*.png"))
+                    if screenshots:
+                        st.header("Screenshot Analysis")
+                        for idx, img_path in enumerate(screenshots):
+                            col_img, col_analysis = st.columns([1, 1])
+                            with col_img:
+                                img = Image.open(img_path)
+                                st.image(img, caption=os.path.basename(img_path), use_container_width=True)
+                            # Gather all analysis results
+                            description = None
+                            metrics = None
+                            qa_result = None
+                            # Get LLM description
+                            try:
+                                description = get_image_description_gpt4v(img_path)
+                            except Exception as e:
+                                description = f"Failed to generate storyboard description: {str(e)}"
+                            # Get metrics
+                            try:
+                                metrics = get_image_metrics(img_path)
+                            except Exception as e:
+                                metrics = {"error": str(e)}
+                            # Get LLM Q&A
+                            try:
+                                qa_result = get_llm_qa(img_path)
+                            except Exception as e:
+                                qa_result = {"error": str(e)}
+                            # Display all results below the image
+                            with col_img:
+                                st.markdown(f"**Storyboard Description:**\n{description}")
+                                st.markdown("**Basic Metrics:**")
+                                st.json(metrics)
+                                st.markdown("**LLM-based Q&A:**")
+                                st.json(qa_result)
+                                # Combine all into a single JSON output
+                                combined_output = {
+                                    "storyboard_description": description,
+                                    "metrics": metrics,
+                                    "llm_qa": qa_result
+                                }
+                                st.markdown("**Combined Output (JSON):**")
+                                st.json(combined_output)
+                            st.markdown("---")
+                    else:
+                        st.warning("No screenshots were generated.")
             else:
                 st.error("Could not determine video duration.")
-                st.code(duration_output)  # This will show the ffmpeg output in the Streamlit app
+                st.code(duration_output)
         except Exception as e:
             st.error(f"Error processing video: {str(e)}")
 
