@@ -98,6 +98,9 @@ max_frames = st.number_input("Maximum frames to extract", min_value=1, max_value
 #   - Uses GPT-4 Vision to answer these questions for the given image, returning answers as a JSON object if possible.
 #   - Designed for flexible, multi-category evaluation (e.g., cinematography, lighting, storytelling, etc.).
 
+# Set OpenAI API key globally for legacy API usage
+openai.api_key = st.secrets["OPENAI_API_KEY"]
+
 def get_image_description_gpt4v(image_path):
     """
     Generate a creative storyboard description for an image using GPT-4 Vision.
@@ -114,8 +117,7 @@ def get_image_description_gpt4v(image_path):
         "Describe this scene for a storyboard in about 100 words. "
         "Focus on the visual details, mood, and what a viewer should feel or notice."
     )
-    client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-    response = client.chat.completions.create(
+    response = openai.chat.completions.create(
         model="gpt-4-vision-preview",
         messages=[
             {
@@ -212,8 +214,7 @@ def get_llm_qa(image_path, questions_path="questions.txt"):
         "Return your answers as a JSON object where each key is the category and each value is your answer."
     )
     prompt = instruction + "\n\n" + questions
-    client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-    response = client.chat.completions.create(
+    response = openai.chat.completions.create(
         model="gpt-4-vision-preview",
         messages=[
             {
@@ -351,6 +352,3 @@ if video_file is not None and st.button("Extract and Analyze Screenshots"):
                 st.code(duration_output)
         except Exception as e:
             st.error(f"Error processing video: {str(e)}")
-
-# Set your OpenAI API key (use st.secrets in production)
-openai.api_key = st.secrets["OPENAI_API_KEY"]
