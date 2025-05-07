@@ -98,8 +98,8 @@ max_frames = st.number_input("Maximum frames to extract", min_value=1, max_value
 #   - Uses GPT-4 Vision to answer these questions for the given image, returning answers as a JSON object if possible.
 #   - Designed for flexible, multi-category evaluation (e.g., cinematography, lighting, storytelling, etc.).
 
-# Set up OpenAI client using the new SDK pattern (no api_key argument for Streamlit Cloud)
-client = openai.OpenAI()
+# Set OpenAI API key globally for legacy API usage (robust for Streamlit Cloud)
+openai.api_key = st.secrets["OPENAI_API_KEY"]
 
 def get_image_description_gpt4v(image_path):
     """
@@ -117,7 +117,7 @@ def get_image_description_gpt4v(image_path):
         "Describe this scene for a storyboard in about 100 words. "
         "Focus on the visual details, mood, and what a viewer should feel or notice."
     )
-    response = client.chat.completions.create(
+    response = openai.ChatCompletion.create(
         model="gpt-4o",
         messages=[
             {
@@ -214,7 +214,7 @@ def get_llm_qa(image_path, questions_path="questions.txt"):
         "Return your answers as a JSON object where each key is the category and each value is your answer."
     )
     prompt = instruction + "\n\n" + questions
-    response = client.chat.completions.create(
+    response = openai.ChatCompletion.create(
         model="gpt-4o",
         messages=[
             {
