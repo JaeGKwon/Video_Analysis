@@ -305,8 +305,9 @@ if video_file is not None and st.button("Extract and Analyze Screenshots"):
                     screenshots = sorted(glob.glob(f"{screenshot_folder}/screenshot_*.png"))
                     if screenshots:
                         st.header("Screenshot Analysis")
+                        final_output = []
                         for idx, img_path in enumerate(screenshots):
-                            col_img, col_analysis = st.columns([1, 1])
+                            col_img, col_analysis = st.columns([1, 2])
                             with col_img:
                                 img = Image.open(img_path)
                                 st.image(img, caption=os.path.basename(img_path), use_container_width=True)
@@ -329,14 +330,43 @@ if video_file is not None and st.button("Extract and Analyze Screenshots"):
                                 qa_result = get_llm_qa(img_path)
                             except Exception as e:
                                 qa_result = {"error": str(e)}
-                            # Display all results below the image
-                            with col_img:
+                            # Extract capture time from filename (if possible)
+                            capture_sec = None
+                            try:
+                                # Example: screenshot_0001.png
+                                frame_num = int(os.path.splitext(os.path.basename(img_path))[0].split('_')[-1])
+                                capture_sec = int(interval) * (frame_num - 1)
+                            except Exception:
+                                capture_sec = None
+                            # Display all results in the right column
+                            with col_analysis:
                                 st.markdown(f"**Storyboard Description:**\n{description}")
                                 with st.expander("Basic Metrics (JSON)"):
                                     st.json(metrics)
                                 with st.expander("LLM-based Q&A (JSON)"):
                                     st.json(qa_result)
+                            # Collect all results for final output
+                            final_output.append({
+                                "stream_file": {
+                                    "file_name": video_file.name,
+                                    "duration_sec": duration
+                                },
+                                "screenshot": {
+                                    "file": os.path.basename(img_path),
+                                    "capture_sec": capture_sec
+                                },
+                                "description": description,
+                                "metrics": metrics,
+                                "llm_qa": qa_result
+                            })
                             st.markdown("---")
+                        # Download button for final_output as JSON
+                        st.download_button(
+                            label="Download All Results as JSON",
+                            data=json.dumps(final_output, indent=2),
+                            file_name="final_output.json",
+                            mime="application/json"
+                        )
                     else:
                         st.warning("No screenshots were generated.")
             else:
