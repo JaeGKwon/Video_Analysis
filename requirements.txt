@@ -17,3 +17,5 @@ pandas==2.2.1
 ftfy==6.1.1
 regex
 tqdm==4.66.2
+opencv-python
+scikit-image
